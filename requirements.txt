@@ -1,0 +1,15 @@
+# LangGraph and recent LangChain stack require Python 3.10+ (not 3.8/3.9).
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+langgraph>=0.1.0
+langchain>=0.2.0
+langchain-openai>=0.1.0
+openai>=1.30.0
+tree-sitter>=0.22.0
+tree-sitter-python>=0.21.0
+tree-sitter-javascript>=0.21.0
+pydantic>=2.7.0
+python-dotenv>=1.0.0
+json-repair>=0.28.0
+slowapi>=0.1.9
+sse-starlette>=2.0.0
