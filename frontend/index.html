@@ -1,0 +1,2747 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' http://127.0.0.1:*; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:;">
+<title>CodeReview AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:         #0d1117;
+  --bg-sidebar: #161b22;
+  --bg-editor:  #1e1b2e;
+  --bg-panel:   #161b22;
+  --surface:    #21262d;
+  --border:     #30363d;
+  --purple:     #6d4de8;
+  --purple-l:   #2d1f5e;
+  --purple-t:   rgba(109,77,232,0.15);
+  --text:       #c9d1d9;
+  --text-dim:   #8b949e;
+  --text-bright:#f0f6fc;
+  --red:        #f85149;  --red-bg:    rgba(248,81,73,0.12);
+  --amber:      #d29922;  --amber-bg:  rgba(210,153,34,0.12);
+  --blue:       #58a6ff;  --blue-bg:   rgba(88,166,255,0.12);
+  --green:      #3fb950;  --green-bg:  rgba(63,185,80,0.12);
+  --gray:       #6e7681;
+  --radius:     6px;
+  --titlebar-h: 32px;
+  --statusbar-h: 24px;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg); color: var(--text);
+  height: 100vh; overflow: hidden;
+}
+/* Allow text selection in content areas */
+.chat-history, .chat-history *,
+#report-content, #report-content *,
+.review-body, .review-body *,
+pre, code { user-select: text; }
+
+/* Custom Title Bar */
+.titlebar {
+  height: var(--titlebar-h); background: var(--bg-sidebar);
+  display: flex; align-items: center; padding: 0 12px;
+  -webkit-app-region: drag; border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text-dim);
+}
+.titlebar .app-icon { font-size: 14px; margin-right: 8px; color: var(--purple); }
+.titlebar .app-title { font-weight: 600; color: var(--text); margin-right: 16px; }
+.titlebar .spacer { flex: 1; }
+.titlebar .win-controls { display: flex; -webkit-app-region: no-drag; }
+.titlebar .win-btn {
+  width: 40px; height: var(--titlebar-h); display: flex; align-items: center;
+  justify-content: center; cursor: pointer; color: var(--text-dim); font-size: 16px;
+  background: none; border: none; transition: background .15s;
+}
+.titlebar .win-btn:hover { background: var(--surface); color: var(--text); }
+.titlebar .win-btn.close:hover { background: var(--red); color: #fff; }
+
+/* Main Layout */
+.main-layout {
+  display: flex; height: calc(100vh - var(--titlebar-h) - var(--statusbar-h));
+  position: relative;
+}
+
+/* Resizer */
+.resizer {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.2s, box-shadow 0.2s;
+  z-index: 100;
+  flex-shrink: 0;
+  height: 100%;
+}
+.resizer:hover, .resizer.dragging {
+  background: var(--purple);
+  box-shadow: 0 0 8px var(--purple);
+}
+
+/* Explorer Panel */
+.explorer {
+  width: 220px; min-width: 160px; background: var(--bg-sidebar);
+  border-right: 1px solid var(--border); display: flex; flex-direction: column;
+  flex-shrink: 0;
+}
+.explorer-header {
+  padding: 10px 14px 6px; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .8px; color: var(--text-dim);
+}
+.explorer-tree { flex: 1; overflow-y: auto; font-size: 13px; padding: 0 4px; }
+.tree-item {
+  display: flex; align-items: center; padding: 3px 8px; border-radius: 4px;
+  cursor: pointer; color: var(--text-dim); gap: 6px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.tree-item:hover { background: var(--surface); color: var(--text); }
+.tree-item.active { background: var(--purple-t); color: var(--purple); }
+.tree-item .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tree-toggle { width: 12px; text-align: center; font-size: 10px; flex-shrink: 0; cursor: pointer; color: var(--text-dim); }
+.tree-icon, .tab-icon {
+  width: 18px; height: 14px; flex: 0 0 18px; position: relative; display: inline-block;
+}
+.tree-icon.folder::before {
+  content: ''; position: absolute; left: 1px; top: 5px; width: 12px; height: 8px;
+  border: 1px solid #d29922; border-radius: 2px; background: rgba(210,153,34,.12);
+}
+.tree-icon.folder::after {
+  content: ''; position: absolute; left: 2px; top: 3px; width: 6px; height: 3px;
+  border: 1px solid #d29922; border-bottom: 0; border-radius: 2px 2px 0 0;
+}
+.tree-icon.file::before, .tab-icon::before {
+  content: ''; position: absolute; left: 3px; top: 1px; width: 9px; height: 12px;
+  border: 1px solid #8b949e; border-radius: 2px; background: rgba(139,148,158,.10);
+}
+.tree-icon.file::after, .tab-icon::after {
+  content: ''; position: absolute; right: 2px; top: 1px; width: 4px; height: 4px;
+  border-left: 1px solid #8b949e; border-bottom: 1px solid #8b949e; background: var(--bg-sidebar);
+}
+.tree-icon.python::before, .tab-icon.python::before { border-color: #58a6ff; background: rgba(88,166,255,.12); }
+.tree-icon.javascript::before, .tab-icon.javascript::before { border-color: #d29922; background: rgba(210,153,34,.12); }
+.tree-icon.typescript::before, .tab-icon.typescript::before { border-color: #58a6ff; background: rgba(88,166,255,.12); }
+.tree-icon.markup::before, .tab-icon.markup::before { border-color: #bc8cff; background: rgba(188,140,255,.12); }
+.tree-icon.config::before, .tab-icon.config::before { border-color: #3fb950; background: rgba(63,185,80,.12); }
+.tree-icon.python::before, .tab-icon.python::before,
+.tree-icon.javascript::before, .tab-icon.javascript::before,
+.tree-icon.typescript::before, .tab-icon.typescript::before {
+  left: 0; top: 1px; width: 18px; height: 13px; border-radius: 3px;
+  font-size: 8px; font-weight: 700; line-height: 12px; text-align: center;
+  background: rgba(88,166,255,.12);
+}
+.tree-icon.python::before, .tab-icon.python::before { content: 'Py'; color: #58a6ff; border-color: #58a6ff; }
+.tree-icon.javascript::before, .tab-icon.javascript::before { content: 'JS'; color: #d29922; border-color: #d29922; background: rgba(210,153,34,.12); }
+.tree-icon.typescript::before, .tab-icon.typescript::before { content: 'TS'; color: #58a6ff; border-color: #58a6ff; }
+.tree-icon.python::after, .tab-icon.python::after,
+.tree-icon.javascript::after, .tab-icon.javascript::after,
+.tree-icon.typescript::after, .tab-icon.typescript::after { display: none; }
+.tree-children { display: none; }
+.tree-children.open { display: block; }
+.explorer-actions {
+  padding: 8px; border-top: 1px solid var(--border); display: flex; gap: 6px;
+}
+.explorer-actions button {
+  flex: 1; padding: 6px; border-radius: var(--radius); font-size: 12px;
+  cursor: pointer; border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); transition: all .15s;
+}
+.explorer-actions button:hover { background: var(--purple); border-color: var(--purple); color: #fff; }
+
+/* Editor Panel */
+.editor-panel { flex: 1; display: flex; flex-direction: column; min-width: 200px; }
+.tab-bar {
+  display: flex; background: var(--bg-sidebar); border-bottom: 1px solid var(--border);
+  overflow-x: auto; flex-shrink: 0; min-height: 35px;
+}
+.tab {
+  display: flex; align-items: center; gap: 6px; padding: 0 14px; min-width: 100px;
+  font-size: 13px; color: var(--text-dim); cursor: pointer; border-right: 1px solid var(--border);
+  background: var(--bg-sidebar); user-select: none; white-space: nowrap; position: relative;
+}
+.tab.active { background: var(--bg-editor); color: var(--text); border-bottom: 2px solid var(--purple); }
+.tab:hover { color: var(--text); }
+.tab .tab-close {
+  font-size: 14px; cursor: pointer; opacity: 0; transition: opacity .15s; color: var(--text-dim);
+  background: none; border: none; padding: 0; line-height: 1;
+}
+.tab:hover .tab-close, .tab.active .tab-close { opacity: 1; }
+.tab .tab-close:hover { color: var(--red); }
+.tab .tab-icon { font-size: 14px; }
+
+/* Editor Textarea */
+.editor-wrap { flex: 1; position: relative; overflow: hidden; }
+.editor-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; color: var(--text-dim); font-size: 14px; gap: 12px; background: var(--bg-editor);
+}
+.editor-empty .big-icon { font-size: 48px; opacity: .3; }
+.editor-container { display: flex; height: 100%; }
+.line-numbers {
+  width: 48px; background: var(--bg-editor); color: var(--gray); font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; line-height: 1.65; padding: 12px 8px 12px 0; text-align: right;
+  overflow: hidden; flex-shrink: 0; user-select: none;
+}
+.code-editor-surface { position: relative; flex: 1; min-width: 0; background: var(--bg-editor); overflow: hidden; }
+#editor, #editor-highlight {
+  position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; border: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.65;
+  padding: 12px 16px; tab-size: 4; white-space: pre; overflow: auto;
+}
+#editor-highlight {
+  pointer-events: none; color: #cdd6f4; background: var(--bg-editor); overflow: hidden;
+}
+#editor {
+  outline: none; resize: none; background: transparent; color: transparent;
+  caret-color: #f0f6fc; -webkit-text-fill-color: transparent;
+}
+#editor::placeholder { color: #484466; }
+#editor::selection { background: rgba(88,166,255,.30); }
+.tok-keyword { color: #ff7b72; }
+.tok-builtin { color: #d2a8ff; }
+.tok-string { color: #a5d6ff; }
+.tok-number { color: #79c0ff; }
+.tok-comment { color: #8b949e; font-style: italic; }
+.tok-decorator { color: #ffa657; }
+.tok-operator { color: #ff7b72; }
+
+/* Review Panel */
+.review-panel {
+  width: 380px; min-width: 250px; background: var(--bg-panel);
+  border-left: 1px solid var(--border); display: flex; flex-direction: column;
+  flex-shrink: 0; overflow: hidden;
+}
+.review-header {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.review-header h2 { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+.review-body { flex: 1; overflow-y: auto; }
+
+/* Accordion sections */
+.section { border-bottom: 1px solid var(--border); }
+.section-header {
+  display: flex; align-items: center; padding: 8px 14px; cursor: pointer;
+  font-size: 12px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--text-dim); gap: 6px;
+}
+.section-header:hover { background: var(--surface); }
+.section-header .arrow { font-size: 10px; transition: transform .2s; }
+.section-header .arrow.open { transform: rotate(90deg); }
+.section-content { display: none; padding: 8px 14px; }
+.section-content.open { display: block; }
+
+/* Action buttons */
+.btn-primary {
+  width: 100%; padding: 8px; border-radius: var(--radius); font-size: 13px;
+  font-weight: 600; cursor: pointer; border: none;
+  background: var(--purple); color: #fff; transition: background .15s;
+}
+.btn-primary:hover { background: #5a3dd4; }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.lang-select {
+  padding: 5px 8px; border-radius: var(--radius); font-size: 12px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  outline: none; cursor: pointer;
+}
+
+/* Agent cards */
+.agent-list { display: flex; flex-direction: column; gap: 4px; }
+.agent-item {
+  display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+  border-radius: 4px; font-size: 12px;
+}
+.agent-item.running { background: var(--purple-t); color: var(--purple); }
+.agent-item.done { color: var(--green); }
+.agent-item.error { color: var(--red); }
+.agent-item .agent-icon { font-size: 14px; width: 18px; text-align: center; }
+.agent-item .agent-name { flex: 1; color: var(--text-dim); }
+.agent-item .agent-status { font-size: 11px; }
+.spin {
+  display: inline-block; width: 12px; height: 12px; border: 2px solid var(--purple);
+  border-top-color: transparent; border-radius: 50%;
+  animation: spin .7s linear infinite; vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Scores */
+.score-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.score-item {
+  background: var(--surface); border-radius: var(--radius); padding: 8px;
+  text-align: center; border: 1px solid var(--border);
+}
+.score-item.overall { grid-column: 1 / -1; border-color: var(--purple); background: var(--purple-t); }
+.score-label { font-size: 11px; color: var(--text-dim); margin-bottom: 2px; }
+.score-value { font-size: 20px; font-weight: 700; }
+
+/* Issues */
+.issue-filters { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+.filter-tag {
+  padding: 2px 8px; border-radius: 12px; font-size: 11px; cursor: pointer;
+  border: 1px solid var(--border); background: none; color: var(--text-dim);
+}
+.filter-tag.active { border-color: var(--purple); background: var(--purple-t); color: var(--purple); }
+.issue-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); margin-bottom: 6px; overflow: hidden;
+}
+.issue-head {
+  display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px;
+  cursor: pointer; font-size: 12px;
+}
+.issue-head:hover { background: rgba(255,255,255,.03); }
+.sev { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; flex-shrink: 0; }
+.sev-HIGH   { background: var(--red-bg);   color: var(--red);   }
+.sev-MEDIUM { background: var(--amber-bg); color: var(--amber); }
+.sev-LOW    { background: var(--blue-bg);  color: var(--blue);  }
+.sev-INFO   { background: rgba(110,118,129,.15); color: var(--gray); }
+.issue-title { flex: 1; min-width: 0; }
+.issue-type { font-weight: 600; font-size: 12px; color: var(--text); }
+.issue-msg { font-size: 11px; color: var(--text-dim); margin-top: 1px;
+             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.issue-meta { font-size: 10px; color: var(--text-dim); white-space: nowrap; }
+.issue-detail { display: none; padding: 0 10px 8px; border-top: 1px solid var(--border); }
+.issue-detail.open { display: block; }
+.issue-evidence {
+  background: var(--bg-editor); color: #cdd6f4; font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; padding: 6px 8px; border-radius: 4px; margin: 6px 0;
+  white-space: pre-wrap; word-break: break-all;
+}
+.issue-fix {
+  background: var(--green-bg); border: 1px solid rgba(63,185,80,.2);
+  border-radius: 4px; padding: 6px 8px; font-size: 11px; color: var(--green);
+}
+.issue-fix strong { display: block; margin-bottom: 2px; }
+.btn-fix {
+  margin-top: 6px; padding: 4px 10px; border-radius: var(--radius); font-size: 11px;
+  cursor: pointer; border: 1px solid var(--purple); background: var(--purple-t);
+  color: var(--purple); font-weight: 600; transition: all .15s;
+}
+.btn-fix:hover { background: var(--purple); color: #fff; }
+
+/* Diff viewer */
+.diff-viewer {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  border-radius: var(--radius); overflow: hidden; margin: 6px 0;
+  border: 1px solid var(--border);
+  max-height: 300px; overflow-y: auto;
+  background: var(--bg-editor);
+}
+.diff-line { padding: 1px 8px; white-space: pre-wrap; word-break: break-all; }
+.diff-add { background: var(--green-bg); color: var(--green); }
+.diff-del { background: var(--red-bg); color: var(--red); }
+.diff-hunk { background: var(--blue-bg); color: var(--blue); font-style: italic; }
+
+/* Report */
+#report-content { font-size: 13px; line-height: 1.65; padding: 4px 0; }
+#report-content h1 { font-size: 18px; margin-bottom: 10px; color: var(--purple); }
+#report-content h2 { font-size: 14px; font-weight: 700; margin: 14px 0 6px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+#report-content h3 { font-size: 13px; font-weight: 700; margin: 10px 0 4px; }
+#report-content p { margin-bottom: 6px; }
+#report-content code { background: var(--surface); color: var(--purple); padding: 1px 4px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+#report-content pre { background: var(--bg-editor); color: #cdd6f4; padding: 8px 10px; border-radius: var(--radius); overflow-x: auto; margin: 6px 0; }
+#report-content pre code { background: none; color: inherit; padding: 0; }
+#report-content table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 12px; }
+#report-content th, #report-content td { padding: 5px 8px; border: 1px solid var(--border); text-align: left; }
+#report-content th { background: var(--surface); }
+#report-content blockquote { border-left: 3px solid var(--purple); padding-left: 8px; color: var(--text-dim); margin: 6px 0; }
+#report-content ul, #report-content ol { padding-left: 18px; margin-bottom: 6px; }
+
+/* Status Bar */
+.statusbar {
+  height: var(--statusbar-h); background: var(--purple); color: #fff;
+  display: flex; align-items: center; padding: 0 12px; font-size: 11px; gap: 16px;
+}
+.statusbar .sep { width: 1px; height: 14px; background: rgba(255,255,255,.3); }
+.statusbar .status-item { display: flex; align-items: center; gap: 4px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gray); }
+
+/* Expert Thoughts */
+.expert-card {
+  margin-bottom: 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.expert-header {
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.expert-tag {
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.expert-body {
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-dim);
+  font-style: italic;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+/* Tool call entries inside expert cards */
+.tool-entry {
+  margin: 4px 0;
+  border-radius: 4px;
+  font-size: 11px;
+  overflow: hidden;
+}
+.tool-call-header {
+  padding: 3px 8px;
+  background: rgba(88, 166, 255, 0.1);
+  color: #58a6ff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tool-call-header:hover { background: rgba(88, 166, 255, 0.18); }
+.tool-result-body {
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 120px;
+  overflow-y: auto;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 10px;
+  border-top: 1px solid var(--border);
+  display: none;
+}
+.tool-result-body.open { display: block; }
+
+/* Loading overlay */
+.loading-overlay {
+  position: fixed; inset: 0; background: var(--bg); display: flex;
+  flex-direction: column; align-items: center; justify-content: center;
+  z-index: 9999; gap: 16px;
+}
+.loading-overlay .loader { width: 40px; height: 40px; border: 3px solid var(--border);
+  border-top-color: var(--purple); border-radius: 50%; animation: spin 1s linear infinite; }
+.loading-overlay.hidden { display: none; }
+
+/* Diff highlights in editor */
+.diff-add-bg { background: rgba(63,185,80,0.12); }
+.diff-del-bg { background: rgba(248,81,73,0.12); }
+.gutter-line { display: block; line-height: 1.65; text-align: right; padding-right: 12px; }
+.gutter-add { background: rgba(63,185,80,0.2); }
+.gutter-del { background: rgba(248,81,73,0.2); }
+.diff-inline-btn {
+  display: none; position: absolute; right: 4px; top: 1px;
+  padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); cursor: pointer;
+  font-size: 11px; font-family: inherit; z-index: 11; pointer-events: auto;
+}
+.diff-add-bg:hover .diff-inline-btn,
+.diff-del-bg:hover .diff-inline-btn { display: inline-block; }
+.diff-add-bg, .diff-del-bg { position: relative; display: inline; }
+</style>
+</head>
+<body>
+
+<!-- Loading overlay while Python backend starts -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="loader"></div>
+  <div style="color:var(--text-dim);font-size:13px" id="loading-text">正在启动 AI 后端...</div>
+</div>
+
+<!-- Title Bar -->
+<div class="titlebar">
+  <span class="app-icon">◉</span>
+  <span class="app-title">CodeReview AI</span>
+  <span id="project-name" style="color:var(--text-dim)">未打开项目</span>
+  <div class="spacer"></div>
+  <span id="header-status" style="font-size:11px;color:var(--text-dim)"></span>
+  <div class="win-controls">
+    <button class="win-btn" onclick="electronAPI?.minimize()" aria-label="最小化">─</button>
+    <button class="win-btn" onclick="electronAPI?.maximize()" aria-label="最大化">□</button>
+    <button class="win-btn close" onclick="electronAPI?.close()" aria-label="关闭">✕</button>
+  </div>
+</div>
+
+<!-- Main 3-Panel Layout -->
+<div class="main-layout">
+
+  <!-- Left: Explorer -->
+  <div class="explorer">
+    <div class="explorer-header">Explorer</div>
+    <div class="explorer-tree" id="file-tree">
+      <div style="padding:20px 14px;color:var(--text-dim);font-size:12px;text-align:center">
+        点击下方按钮<br>打开项目目录
+      </div>
+    </div>
+    <div class="explorer-actions">
+      <button onclick="openFolder()">📂 打开目录</button>
+      <button onclick="openSingleFile()">📄 打开文件</button>
+    </div>
+  </div>
+
+  <!-- Center: Editor -->
+  <div class="editor-panel">
+    <div class="tab-bar" id="tab-bar">
+      <!-- Tabs inserted dynamically -->
+    </div>
+    <div class="editor-wrap">
+      <div class="editor-empty" id="editor-empty">
+        <div class="big-icon">📝</div>
+        <div>打开文件或粘贴代码开始审查</div>
+        <div style="font-size:12px;color:var(--gray)">Ctrl+O 打开目录 · 支持 Python / JS / TS / Java / C++ / Go</div>
+      </div>
+      <div class="editor-container" id="editor-container" style="display:none">
+        <div class="line-numbers" id="line-numbers"></div>
+        <div class="code-editor-surface">
+          <pre id="editor-highlight" aria-hidden="true"></pre>
+          <textarea id="editor" spellcheck="false" wrap="off" placeholder="粘贴代码到这里..."></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Chat Interface -->
+  <div id="v-resizer" class="resizer"></div>
+  <div class="review-panel" style="display: flex; flex-direction: column; overflow: hidden;">
+    <div class="review-header">
+      <h2>💬 AI CodeReviewer</h2>
+    </div>
+    <div class="review-body" style="display: flex; flex-direction: column; height: 100%;">
+      <style>
+        #chat-history pre { white-space: pre-wrap; word-wrap: break-word; overflow-x: auto; max-width: 100%; }
+        #chat-history code { white-space: pre-wrap; word-break: break-word; }
+      </style>
+      <div class="chat-history" id="chat-history" style="flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
+          <div style="color:var(--text-dim); text-align:center; font-size:12px; margin-top:20px;">欢迎使用! <br>输入全工程需求或者具体代码探讨即可交互对话。</div>
+      </div>
+      <div id="diff-action-bar" style="display:none; padding:6px 10px; background:rgba(109,77,232,0.08); border-bottom:1px solid var(--purple); align-items:center; gap:8px; font-size:12px;">
+        <span id="diff-summary" style="color:var(--text); flex:1;"></span>
+        <button onclick="applyAllChanges()" style="padding:3px 10px; border-radius:4px; border:1px solid var(--green); background:var(--green-bg); color:var(--green); cursor:pointer; font-size:12px;">✓ Apply All</button>
+        <button onclick="undoAllChanges()" style="padding:3px 10px; border-radius:4px; border:1px solid var(--red); background:var(--red-bg); color:var(--red); cursor:pointer; font-size:12px;">↩ Undo All</button>
+      </div>
+      <div class="chat-input-bar" style="padding: 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; background: var(--bg-panel); flex-shrink: 0;">
+        <div style="background:#fff3cd; padding:4px 8px; font-size:11px; color:#856404; border-radius:4px; text-align:center;">
+          ⚠ 代码将被发送到 DeepSeek / OpenAI 第三方 API 进行分析
+        </div>
+        <textarea id="chat-textarea" placeholder="输入你想对当前文件/项目说的..." aria-label="聊天输入框" style="width: 100%; height: 80px; resize: none; padding: 8px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-family: inherit; font-size: 13px;"></textarea>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button id="send-chat-btn" class="btn-primary" aria-label="发送消息" style="width: auto; padding: 6px 16px;" onclick="sendChatMessage()">发送</button>
+          <button onclick="saveChatToFile()" title="保存对话到 .md 文件" style="padding:6px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);cursor:pointer;font-size:12px;">💾 保存</button>
+          <button onclick="loadChatFromFile()" title="从 .md 文件加载对话" style="padding:6px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);cursor:pointer;font-size:12px;">📂 加载</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Status Bar -->
+<div class="statusbar">
+  <span class="status-item" id="sb-lang">Python</span>
+  <span class="sep"></span>
+  <span class="status-item" id="sb-lines">0 行</span>
+  <span class="sep"></span>
+  <span class="status-item">UTF-8</span>
+  <span class="sep"></span>
+  <span class="status-item" id="sb-provider">⏳ 连接中...</span>
+  <div style="flex:1"></div>
+  <span class="status-item" id="sb-status">Ready</span>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/api.js"></script>
+<script>
+// API_BASE is declared in js/api.js — use setApiBase(newUrl) or getApiBase()
+// Constants
+const AGENT_META = {
+  context:    { label: '上下文分析', icon: '[C]' },
+  preprocess: { label: '预处理',     icon: '[P]' },
+  reviewer:   { label: '代码审查',   icon: '[R]' },
+  security:   { label: '安全分析',   icon: '[S]' },
+  optimizer:  { label: '性能优化',   icon: '[O]' },
+  documenter: { label: '文档分析',   icon: '[D]' },
+  tester:     { label: '测试质量',   icon: '[T]' },
+  architect:  { label: '架构设计',   icon: '[A]' },
+  summarizer: { label: '综合裁判',   icon: '[M]' },
+};
+const AGENT_ORDER = ['preprocess', 'reviewer', 'security', 'optimizer', 'documenter', 'tester', 'architect', 'repair', 'summarizer'];
+const EXPERT_UI = {
+  preprocess: { label: '系统分析', icon: '[P]', color: '#8b949e' },
+  reviewer:   { label: '代码审查', icon: '[R]', color: '#58a6ff' },
+  security:   { label: '安全专家', icon: '[S]', color: '#f85149' },
+  optimizer:  { label: '性能专家', icon: '[O]', color: '#d29922' },
+  documenter: { label: '文档专家', icon: '[D]', color: '#3fb950' },
+  tester:     { label: '测试专家', icon: '[T]', color: '#bc8cff' },
+  architect:  { label: '架构专家', icon: '[A]', color: '#6d4de8' },
+  repair:     { label: '修复专家', icon: '[H]', color: '#3fb950' },
+  summarizer: { label: '综合裁判', icon: '[M]', color: '#f0f6fc' }
+};
+
+// State
+let currentResult = null;
+let activeFilter = 'ALL';
+let openTabs = [];       // [{path, name, content, language, modified}]
+let activeTabIdx = -1;
+let projectRoot = '';
+let projectFiles = [];   // From collect-project-files
+let lastReviewIssues = [];
+let lastReviewContent = '';
+let lastPrimaryFile = null;  // {filename, path, code, language} from last review
+let activeFileOpenToken = 0;
+let pendingAssistantRender = null;
+let assistantRenderTimer = null;
+let lastAssistantRenderAt = 0;
+let pendingChanges = [];  // {id, file, lineStart, lineEnd, type, oldString, newString}
+let pendingFiles = [];    // {id, path, name, content, language, type: 'create'|'delete', oldContent?}
+
+// Backend Lifecycle
+if (window.electronAPI) {
+  window.electronAPI.onBackendReady((data) => {
+    if (data?.url) API_BASE = data.url;
+    document.getElementById('loading-overlay').classList.add('hidden');
+    document.getElementById('sb-provider').textContent = data.configured
+      ? `OK ${data.provider}`
+      : 'API Key 未配置';
+    document.getElementById('sb-status').textContent = `后端已连接 ${API_BASE}`;
+    initResizer();
+    restoreChatHistoryDOM();
+  });
+  window.electronAPI.onBackendError((data) => {
+    document.getElementById('loading-text').textContent = '后端启动失败: ' + data.message;
+    document.getElementById('loading-text').style.color = 'var(--red)';
+  });
+} else {
+  // Running in browser (dev mode): assume backend is ready.
+  document.getElementById('loading-overlay').classList.add('hidden');
+  document.getElementById('sb-provider').textContent = 'browser mode';
+  initResizer();
+  restoreChatHistoryDOM();
+}
+
+// Explorer
+async function openFolder() {
+  if (!window.electronAPI) { alert('仅在 Electron 桌面模式下可用'); return; }
+  const result = await window.electronAPI.openFolder();
+  if (result.canceled) return;
+  projectRoot = result.rootPath;
+  document.getElementById('project-name').textContent = projectRoot.split(/[\\/]/).pop();
+  renderFileTree(result.tree, document.getElementById('file-tree'), 0);
+}
+
+async function refreshFileTree() {
+  if (!projectRoot || !window.electronAPI) {
+    console.log('refreshFileTree: skipped (no projectRoot or electronAPI)');
+    return;
+  }
+  try {
+    const tree = await window.electronAPI.getFileTree(projectRoot);
+    if (tree && tree.length > 0) {
+      renderFileTree(tree, document.getElementById('file-tree'), 0);
+    }
+  } catch(e) { console.error('refreshFileTree failed:', e); }
+}
+
+async function openSingleFile() {
+  if (window.electronAPI) {
+    const result = await window.electronAPI.openFile();
+    if (result.canceled) return;
+    for (const f of result.files) {
+      openFileTab(f.path, f.name, f.content, f.language);
+    }
+  } else {
+    // Fallback: use browser file input
+    const input = document.createElement('input');
+    input.type = 'file'; input.multiple = true;
+    input.accept = '.py,.js,.ts,.java,.cpp,.go,.c,.h,.rs,.rb,.txt';
+    input.onchange = (e) => {
+      for (const file of e.target.files) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const ext = file.name.split('.').pop().toLowerCase();
+          const langMap = {py:'python',js:'javascript',ts:'typescript',java:'java',cpp:'cpp',go:'go'};
+          openFileTab(file.name, file.name, ev.target.result, langMap[ext] || 'python');
+        };
+        reader.readAsText(file);
+      }
+    };
+    input.click();
+  }
+}
+
+function renderFileTree(tree, container, depth) {
+  container.innerHTML = '';
+  for (const node of tree) {
+    if (node.type === 'dir') {
+      const item = document.createElement('div');
+      const indent = depth * 14;
+      item.innerHTML = `
+        <div class="tree-item" style="padding-left:${indent + 8}px" onclick="toggleTreeDir(this)">
+          <span class="tree-toggle">&gt;</span>
+          <span class="tree-icon folder" title="Folder"></span>
+          <span class="name">${esc(node.name)}</span>
+        </div>
+        <div class="tree-children"></div>`;
+      container.appendChild(item);
+      renderFileTree(node.children || [], item.querySelector('.tree-children'), depth + 1);
+    } else {
+      const indent = depth * 14;
+      const iconClass = fileIconClass(node.ext, node.language);
+      const div = document.createElement('div');
+      div.innerHTML = `<div class="tree-item" style="padding-left:${indent + 22}px" onclick="clickFile('${esc(node.path.replace(/\\/g, '\\\\'))}','${esc(node.name)}','${node.language || 'python'}')">
+        <span class="tree-icon ${iconClass}" title="${esc(node.language || node.ext || 'file')}"></span>
+        <span class="name">${esc(node.name)}</span>
+      </div>`;
+      container.appendChild(div);
+    }
+  }
+}
+
+function fileIconClass(ext, language) {
+  const key = (language || '').toLowerCase();
+  ext = (ext || '').toLowerCase();
+  if (key === 'python') return 'file python';
+  if (key === 'javascript') return 'file javascript';
+  if (key === 'typescript') return 'file typescript';
+  if (['html', 'css', 'scss', 'markdown'].includes(key)) return 'file markup';
+  if (['json', 'yaml', 'toml'].includes(key)) return 'file config';
+  if (['.md', '.html', '.css', '.scss'].includes(ext)) return 'file markup';
+  if (['.json', '.yaml', '.yml', '.toml'].includes(ext)) return 'file config';
+  return 'file';
+}
+
+function fileExtFromName(name) {
+  const m = (name || '').match(/(\.[A-Za-z0-9]+)$/);
+  return m ? m[1].toLowerCase() : '';
+}
+
+function toggleTreeDir(el) {
+  const toggle = el.querySelector('.tree-toggle');
+  const children = el.nextElementSibling;
+  if (children.classList.contains('open')) {
+    children.classList.remove('open');
+    toggle.textContent = '>';
+  } else {
+    children.classList.add('open');
+    toggle.textContent = 'v';
+  }
+}
+
+async function clickFile(filePath, fileName, language) {
+  // Check if already open
+  const existing = openTabs.findIndex(t => t.path === filePath);
+  if (existing >= 0) { switchToTab(existing); return; }
+  const token = ++activeFileOpenToken;
+  document.getElementById('sb-status').textContent = '正在打开 ' + fileName;
+  if (window.electronAPI) {
+    const result = await window.electronAPI.readFile(filePath);
+    if (token !== activeFileOpenToken) return;
+    if (result.error) {
+      console.error(result.error);
+      document.getElementById('sb-status').textContent = '打开失败: ' + result.error;
+      return;
+    }
+    if (typeof result.content !== 'string') {
+      document.getElementById('sb-status').textContent = '打开失败: 文件内容为空或不可读';
+      return;
+    }
+    openFileTab(filePath, fileName, result.content, result.language || language);
+    document.getElementById('sb-status').textContent = '已打开 ' + fileName;
+  }
+}
+
+// Editor Tabs
+function openFileTab(path, name, content, language) {
+  const existing = openTabs.findIndex(t => t.path === path);
+  if (existing >= 0) { switchToTab(existing); return; }
+  openTabs.push({ path, name, content: typeof content === 'string' ? content : '', language: language || 'plaintext', modified: false });
+  switchToTab(openTabs.length - 1);
+  renderTabs();
+}
+
+function switchToTab(idx) {
+  if (idx < 0 || idx >= openTabs.length) return;
+  // Save current editor content
+  const editorEl = document.getElementById('editor');
+  const editorContainer = document.getElementById('editor-container');
+  if (activeTabIdx >= 0 && activeTabIdx < openTabs.length && editorContainer.style.display !== 'none') {
+    openTabs[activeTabIdx].content = editorEl.value;
+  }
+  activeTabIdx = idx;
+  const tab = openTabs[idx];
+  editorEl.value = typeof tab.content === 'string' ? tab.content : '';
+  editorEl.scrollTop = 0;
+  editorEl.scrollLeft = 0;
+  document.getElementById('sb-lang').textContent = (tab.language || 'plaintext').charAt(0).toUpperCase() + (tab.language || 'plaintext').slice(1);
+  document.getElementById('editor-empty').style.display = 'none';
+  editorContainer.style.display = 'flex';
+  updateLineNumbers();
+  updateCharCount();
+  refreshDiffHighlights();
+  renderTabs();
+}
+
+function closeTab(idx, event) {
+  event?.stopPropagation();
+  openTabs.splice(idx, 1);
+  if (openTabs.length === 0) {
+    activeTabIdx = -1;
+    document.getElementById('editor').value = '';
+    refreshDiffHighlights();
+    document.getElementById('editor-empty').style.display = 'flex';
+    document.getElementById('editor-container').style.display = 'none';
+  } else {
+    activeTabIdx = Math.min(idx, openTabs.length - 1);
+    switchToTab(activeTabIdx);
+  }
+  renderTabs();
+}
+
+function renderTabs() {
+  const bar = document.getElementById('tab-bar');
+  bar.innerHTML = openTabs.map((t, i) => `
+    <div class="tab ${i === activeTabIdx ? 'active' : ''}" onclick="switchToTab(${i})">
+      <span class="tab-icon ${fileIconClass(fileExtFromName(t.name), t.language)}" title="${esc(t.language || 'file')}"></span>
+      ${esc(t.name)}
+      <button class="tab-close" onclick="closeTab(${i}, event)">x</button>
+    </div>`).join('');
+}
+
+// Editor
+const editor = document.getElementById('editor');
+const editorHighlight = document.getElementById('editor-highlight');
+editor.addEventListener('input', () => {
+  updateLineNumbers();
+  updateCharCount();
+  renderEditorHighlight();
+});
+editor.addEventListener('scroll', () => {
+  document.getElementById('line-numbers').scrollTop = editor.scrollTop;
+  syncEditorScroll();
+});
+editor.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = editor.selectionStart, end = editor.selectionEnd;
+    editor.value = editor.value.substring(0, s) + '    ' + editor.value.substring(end);
+    editor.selectionStart = editor.selectionEnd = s + 4;
+    updateLineNumbers();
+    updateCharCount();
+    renderEditorHighlight();
+  }
+});
+
+function activeEditorLanguage() {
+  if (activeTabIdx < 0 || activeTabIdx >= openTabs.length) return 'plaintext';
+  return (openTabs[activeTabIdx].language || '').toLowerCase();
+}
+
+function syncEditorScroll() {
+  if (!editorHighlight) return;
+  editorHighlight.scrollTop = editor.scrollTop;
+  editorHighlight.scrollLeft = editor.scrollLeft;
+}
+
+function renderEditorHighlight(diffRanges) {
+  if (!editorHighlight) return;
+  const code = editor.value || '';
+  const language = activeEditorLanguage();
+  let html = highlightCode(code, language);
+  if (!code.endsWith('\n')) html += '\n';
+  if (diffRanges && diffRanges.length > 0) {
+    const lines = html.split('\n');
+    // Group ranges by changeId so we only inject buttons once per change
+    const seenIds = new Set();
+    for (const range of diffRanges) {
+      const cls = range.type === 'add' ? 'diff-add-bg' : 'diff-del-bg';
+      for (let i = range.startLine; i <= range.endLine && i < lines.length; i++) {
+        // Inject hover buttons on the first line of each change
+        if (i === range.startLine && range.changeId && !seenIds.has(range.changeId)) {
+          seenIds.add(range.changeId);
+          const btns = `<button class="diff-inline-btn" onclick="event.stopPropagation();acceptChange(${range.changeId})" title="确认">&#10003;</button><button class="diff-inline-btn" style="right:36px;" onclick="event.stopPropagation();undoChange(${range.changeId})" title="撤销">&#8617;</button>`;
+          lines[i] = `<span class="${cls}">${btns}${lines[i]}</span>`;
+        } else {
+          lines[i] = `<span class="${cls}">${lines[i]}</span>`;
+        }
+      }
+    }
+    html = lines.join('\n');
+  }
+  editorHighlight.innerHTML = html;
+  syncEditorScroll();
+}
+
+function highlightCode(code, language) {
+  if (language === 'python') return highlightPython(code);
+  return esc(code);
+}
+
+function highlightJSON(json) {
+  return esc(json)
+    .replace(/("(?:[^"\\]|\\.)*")\s*:/g, '<span style="color:#79c0ff;">$1</span>:')
+    .replace(/: ("(?:[^"\\]|\\.)*")/g, ': <span style="color:#a5d6ff;">$1</span>')
+    .replace(/: (\d+\.?\d*)/g, ': <span style="color:#79c0ff;">$1</span>')
+    .replace(/: (true|false|null)/g, ': <span style="color:#ff7b72;">$1</span>');
+}
+
+function highlightPython(code) {
+  const keywords = new Set([
+    'False','None','True','and','as','assert','async','await','break','class','continue','def','del',
+    'elif','else','except','finally','for','from','global','if','import','in','is','lambda','nonlocal',
+    'not','or','pass','raise','return','try','while','with','yield'
+  ]);
+  const builtins = new Set([
+    'abs','all','any','bool','dict','enumerate','float','int','len','list','map','max','min','open',
+    'print','range','set','str','sum','super','tuple','zip'
+  ]);
+  let out = '';
+  let i = 0;
+  while (i < code.length) {
+    const ch = code[i];
+    if (ch === '#') {
+      const end = code.indexOf('\n', i);
+      const stop = end === -1 ? code.length : end;
+      out += `<span class="tok-comment">${esc(code.slice(i, stop))}</span>`;
+      i = stop;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      const quote = ch;
+      const triple = code.slice(i, i + 3) === quote.repeat(3);
+      let j = i + (triple ? 3 : 1);
+      while (j < code.length) {
+        if (!triple && code[j] === '\\') {
+          j += 2;
+          continue;
+        }
+        if (triple && code.slice(j, j + 3) === quote.repeat(3)) {
+          j += 3;
+          break;
+        }
+        if (!triple && code[j] === quote) {
+          j += 1;
+          break;
+        }
+        j += 1;
+      }
+      out += `<span class="tok-string">${esc(code.slice(i, j))}</span>`;
+      i = j;
+      continue;
+    }
+    if (ch === '@') {
+      const m = code.slice(i).match(/^@[A-Za-z_][A-Za-z0-9_.]*/);
+      if (m) {
+        out += `<span class="tok-decorator">${esc(m[0])}</span>`;
+        i += m[0].length;
+        continue;
+      }
+    }
+    if (/[0-9]/.test(ch)) {
+      const m = code.slice(i).match(/^[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/);
+      if (m) {
+        out += `<span class="tok-number">${m[0]}</span>`;
+        i += m[0].length;
+        continue;
+      }
+    }
+    if (/[A-Za-z_]/.test(ch)) {
+      const m = code.slice(i).match(/^[A-Za-z_][A-Za-z0-9_]*/);
+      const word = m[0];
+      if (keywords.has(word)) out += `<span class="tok-keyword">${word}</span>`;
+      else if (builtins.has(word)) out += `<span class="tok-builtin">${word}</span>`;
+      else out += esc(word);
+      i += word.length;
+      continue;
+    }
+    if (/[+\-*/%=<>!&|^~:.,()[\]{}]/.test(ch)) {
+      out += `<span class="tok-operator">${esc(ch)}</span>`;
+      i += 1;
+      continue;
+    }
+    out += esc(ch);
+    i += 1;
+  }
+  return out;
+}
+
+function updateLineNumbers(diffRanges) {
+  const total = (editor.value + '\n').split('\n').length - 1;
+  const el = document.getElementById('line-numbers');
+  let html = '';
+  for (let i = 0; i < total; i++) {
+    let cls = 'gutter-line';
+    if (diffRanges && diffRanges.length) {
+      for (const r of diffRanges) {
+        if (i >= r.startLine && i <= r.endLine) {
+          cls += r.type === 'add' ? ' gutter-add' : ' gutter-del';
+          break;
+        }
+      }
+    }
+    html += `<span class="${cls}">${i + 1}</span>`;
+  }
+  el.innerHTML = html;
+}
+
+function updateCharCount() {
+  const lines = editor.value.split('\n').length;
+  document.getElementById('sb-lines').textContent = `${lines} lines`;
+}
+
+// Section Toggle
+function toggleSection(header) {
+  const arrow = header.querySelector('.arrow');
+  const content = header.nextElementSibling;
+  if (content.classList.contains('open')) {
+    content.classList.remove('open');
+    arrow.classList.remove('open');
+  } else {
+    content.classList.add('open');
+    arrow.classList.add('open');
+  }
+}
+
+// Chat Interaction
+let chatMessages = loadChatHistory();
+let chatSessionFile = null;  // auto-save filename, set on first save
+
+function loadChatHistory() {
+  try {
+    const raw = localStorage.getItem('codereview_chat_history');
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return [];
+}
+
+function saveChatHistory() {
+  try {
+    // Keep last 50 messages max to avoid storage bloat
+    const toSave = chatMessages.slice(-50);
+    localStorage.setItem('codereview_chat_history', JSON.stringify(toSave));
+  } catch(e) {}
+}
+
+function restoreChatHistoryDOM() {
+  const history = document.getElementById('chat-history');
+  // Clear existing content (welcome message)
+  const welcome = history.querySelector('div[style*="text-align:center"]');
+  if (welcome && chatMessages.length > 0) welcome.remove();
+  for (const msg of chatMessages) {
+    if (msg.role === 'user') {
+      appendChatBubble('user', msg.content);
+    } else {
+      // Assistant messages are rendered as markdown
+      const el = document.createElement('div');
+      el.style.cssText = 'padding:10px;border-radius:6px;line-height:1.5;margin-bottom:6px;max-width:90%;align-self:flex-start;background:transparent;border:1px solid var(--border);';
+      el.innerHTML = markdownToHtml(msg.content);
+      history.appendChild(el);
+    }
+  }
+}
+
+async function autoSaveChat() {
+  if (chatMessages.length === 0) return;
+  if (!window.electronAPI || !projectRoot) return;
+  // Set session file name once
+  if (!chatSessionFile) {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    chatSessionFile = `chat_${now.getFullYear()}_${pad(now.getMonth()+1)}_${pad(now.getDate())}_${pad(now.getHours())}_${pad(now.getMinutes())}_${pad(now.getSeconds())}.md`;
+  }
+  // Build markdown
+  let md = `# CodeReview Chat\n\n`;
+  for (const msg of chatMessages) {
+    if (msg.role === 'user') {
+      md += `## User\n\n${msg.content}\n\n`;
+    } else {
+      md += `## Assistant\n\n${msg.content}\n\n`;
+    }
+    md += '---\n\n';
+  }
+  try {
+    const filePath = projectRoot.replace(/\\/g, '/') + '/' + chatSessionFile;
+    await window.electronAPI.writeFile(filePath, md);
+  } catch(e) { /* silent */ }
+}
+
+async function saveChatToFile() {
+  if (chatMessages.length === 0) { alert('没有对话内容可保存'); return; }
+  if (!chatSessionFile) {
+    // Force a filename now
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    chatSessionFile = `chat_${now.getFullYear()}_${pad(now.getMonth()+1)}_${pad(now.getDate())}_${pad(now.getHours())}_${pad(now.getMinutes())}_${pad(now.getSeconds())}.md`;
+  }
+  await autoSaveChat();
+  document.getElementById('sb-status').textContent = '已保存: ' + chatSessionFile;
+  refreshFileTree();
+}
+
+async function loadChatFromFile() {
+  if (!window.electronAPI) { alert('仅在 Electron 模式下可用'); return; }
+  const result = await window.electronAPI.openFile();
+  if (result.canceled || !result.files || result.files.length === 0) return;
+  const file = result.files[0];
+  if (!file.content) return;
+  // Parse markdown: ## User / ## Assistant sections
+  const messages = [];
+  const sections = file.content.split(/^## /gm);
+  for (const sec of sections) {
+    const lines = sec.trim().split('\n');
+    const header = lines[0]?.trim().toLowerCase();
+    const body = lines.slice(1).join('\n').trim();
+    if (header === 'user' && body) {
+      messages.push({ role: 'user', content: body });
+    } else if (header === 'assistant' && body) {
+      messages.push({ role: 'assistant', content: body });
+    }
+  }
+  if (messages.length === 0) { alert('文件中未找到对话内容'); return; }
+  // Replace current chat
+  chatMessages = messages;
+  saveChatHistory();
+  // Clear and re-render DOM
+  const history = document.getElementById('chat-history');
+  history.innerHTML = '';
+  for (const msg of chatMessages) {
+    if (msg.role === 'user') {
+      appendChatBubble('user', msg.content);
+    } else {
+      const el = document.createElement('div');
+      el.style.cssText = 'padding:10px;border-radius:6px;line-height:1.5;margin-bottom:6px;max-width:90%;align-self:flex-start;background:transparent;border:1px solid var(--border);';
+      el.innerHTML = markdownToHtml(msg.content);
+      history.appendChild(el);
+    }
+  }
+  document.getElementById('sb-status').textContent = `已加载 ${messages.length} 条对话`;
+}
+
+function appendChatBubble(role, content, isPartial=false) {
+  const history = document.getElementById('chat-history');
+  let bubbleId = isPartial ? `streaming-bubble-${role}` : `bubble-${role}-${Date.now()}`;
+  let el = document.getElementById(bubbleId);
+  
+  if (!el) {
+    const tut = history.querySelector('div[style*="text-align:center"]');
+    if (tut) tut.remove();
+
+    el = document.createElement('div');
+    el.id = bubbleId;
+    el.style.padding = '10px';
+    el.style.borderRadius = '6px';
+    el.style.lineHeight = '1.5';
+    el.style.marginBottom = '6px';
+    el.style.maxWidth = '90%';
+    
+    if (role === 'user') {
+      el.style.alignSelf = 'flex-end';
+      el.style.backgroundColor = 'var(--purple-t)';
+      el.style.border = '1px solid var(--purple)';
+    } else {
+      el.style.alignSelf = 'flex-start';
+      el.style.backgroundColor = 'transparent';
+      el.style.border = '1px solid var(--border)';
+    }
+    history.appendChild(el);
+  }
+  
+  if (role === 'user') {
+    el.innerHTML = esc(content).replace(/\n/g, '<br>');
+  } else {
+    el.innerHTML = markdownToHtml(content);
+  }
+  
+  history.scrollTop = history.scrollHeight;
+  return bubbleId;
+}
+
+function updateAssistantBubble(reasoning, content, isPartial=false, agent='summarizer') {
+  const history = document.getElementById('chat-history');
+  let bubbleId = isPartial ? 'streaming-bubble-assistant' : `bubble-assistant-${Date.now()}`;
+  let el = document.getElementById(bubbleId);
+  
+  if (!el) {
+    const tut = history.querySelector('div[style*="text-align:center"]');
+    if (tut) tut.remove();
+
+    el = document.createElement('div');
+    el.id = bubbleId;
+    el.style.padding = '10px';
+    el.style.borderRadius = '6px';
+    el.style.lineHeight = '1.5';
+    el.style.marginBottom = '6px';
+    el.style.maxWidth = '90%';
+    el.style.alignSelf = 'flex-start';
+    el.style.backgroundColor = 'transparent';
+    el.style.border = '1px solid var(--border)';
+    
+    el.innerHTML = `
+      <div class="reasoning-container" style="margin-bottom:8px;">
+        <details open>
+          <summary style="cursor:pointer; font-weight:bold; outline:none; user-select:none; color:var(--text-dim); font-size:12px;">Expert Roundtable</summary>
+          <div class="rcnt" style="margin-top:8px;"><em style="color:var(--text-dim);">专家正在分析中...</em></div>
+        </details>
+      </div>
+      <div class="content-container"></div>
+    `;
+    history.appendChild(el);
+  }
+  
+  const reasoningContainer = el.querySelector('.reasoning-container');
+  const rcnt = el.querySelector('.rcnt');
+  const contentContainer = el.querySelector('.content-container');
+  
+  if (reasoning) {
+    reasoningContainer.style.display = 'block';
+    
+    // Find or create agent block
+    let agentBlockId = `agent-thought-${agent}`;
+    let agentBlock = rcnt.querySelector(`#${agentBlockId}`);
+    
+    if (!agentBlock) {
+      const cfg = EXPERT_UI[agent] || EXPERT_UI.summarizer;
+      agentBlock = document.createElement('div');
+      agentBlock.id = agentBlockId;
+      agentBlock.className = 'expert-card';
+      agentBlock.innerHTML = `
+        <div class="expert-header">
+          <span>${cfg.icon}</span>
+          <span class="expert-tag" style="background:${cfg.color}33; color:${cfg.color}">${cfg.label}</span>
+        </div>
+        <div class="expert-body"></div>
+      `;
+      
+      // Sorted insertion based on AGENT_ORDER
+      const myIdx = AGENT_ORDER.indexOf(agent);
+      let inserted = false;
+      const existingCards = Array.from(rcnt.querySelectorAll('.expert-card'));
+      for (const card of existingCards) {
+        const otherAgent = card.id.replace('agent-thought-', '');
+        const otherIdx = AGENT_ORDER.indexOf(otherAgent);
+        if (myIdx < otherIdx) {
+          rcnt.insertBefore(agentBlock, card);
+          inserted = true;
+          break;
+        }
+      }
+      if (!inserted) rcnt.appendChild(agentBlock);
+    }
+    
+    const body = agentBlock.querySelector('.expert-body');
+    if (agent === 'summarizer') {
+      body.innerText = reasoning;
+    } else {
+      // Pretty-print JSON with syntax highlighting
+      const trimmed = (reasoning || '').trim();
+      if (trimmed.startsWith('{') && trimmed.includes('"issues"')) {
+        try {
+          const obj = JSON.parse(trimmed);
+          const pretty = JSON.stringify(obj, null, 2);
+          body.innerHTML = `<pre style="font-size:11px; max-height:300px; overflow:auto; white-space:pre; font-family:'JetBrains Mono',monospace; line-height:1.4;">${highlightJSON(pretty)}</pre>`;
+        } catch(e) {
+          body.innerText = trimmed;
+        }
+      } else {
+        body.innerText = trimmed;
+      }
+    }
+  }
+  
+  if (content) {
+    contentContainer.innerHTML = markdownToHtml(content);
+  } else if (isPartial && !content) {
+    contentContainer.innerHTML = '...';
+  }
+  
+  history.scrollTop = history.scrollHeight;
+  return bubbleId;
+}
+
+function flushAssistantRender() {
+  if (assistantRenderTimer) {
+    clearTimeout(assistantRenderTimer);
+    assistantRenderTimer = null;
+  }
+  if (!pendingAssistantRender) return;
+  const items = Object.values(pendingAssistantRender);
+  pendingAssistantRender = null;
+  lastAssistantRenderAt = Date.now();
+  for (const item of items) {
+    updateAssistantBubble(item.reasoning, item.content, item.isPartial, item.agent);
+  }
+}
+
+function scheduleToolRender(agent, ev) {
+  // Ensure the streaming bubble exists without resetting content to '...'
+  let bubble = document.getElementById('streaming-bubble-assistant');
+  if (!bubble) {
+    // Create a temporary bubble — updateAssistantBubble will flesh it out
+    const history = document.getElementById('chat-history');
+    bubble = document.createElement('div');
+    bubble.id = 'streaming-bubble-assistant';
+    bubble.style.cssText = 'padding:10px;border-radius:6px;line-height:1.5;margin-bottom:6px;max-width:90%;align-self:flex-start;background:transparent;border:1px solid var(--border);';
+    bubble.innerHTML = '<div class="reasoning-container" style="margin-bottom:8px;"><details open><summary style="cursor:pointer;font-weight:bold;outline:none;user-select:none;color:var(--text-dim);font-size:12px;">Expert Roundtable</summary><div class="rcnt" style="margin-top:8px;"></div></details></div><div class="content-container">...</div>';
+    const tut = history.querySelector('div[style*="text-align:center"]');
+    if (tut) tut.remove();
+    history.appendChild(bubble);
+  }
+  const rcnt = bubble.querySelector('.rcnt');
+  if (!rcnt) return;
+
+  const agentBlockId = `agent-thought-${agent}`;
+  let agentBlock = rcnt.querySelector(`#${agentBlockId}`);
+  if (!agentBlock) {
+    // Create agent block immediately — don't wait for debounced scheduleAssistantRender
+    const cfg = EXPERT_UI[agent] || EXPERT_UI.summarizer;
+    agentBlock = document.createElement('div');
+    agentBlock.id = agentBlockId;
+    agentBlock.className = 'expert-card';
+    agentBlock.innerHTML = `
+      <div class="expert-header">
+        <span>${cfg.icon}</span>
+        <span class="expert-tag" style="background:${cfg.color}33; color:${cfg.color}">${cfg.label}</span>
+      </div>
+      <div class="expert-body"><em style="color:var(--text-dim);">正在执行工具...</em></div>
+    `;
+    const myIdx = AGENT_ORDER.indexOf(agent);
+    let inserted = false;
+    const existingCards = Array.from(rcnt.querySelectorAll('.expert-card'));
+    for (const card of existingCards) {
+      const otherAgent = card.id.replace('agent-thought-', '');
+      const otherIdx = AGENT_ORDER.indexOf(otherAgent);
+      if (myIdx < otherIdx) { rcnt.insertBefore(agentBlock, card); inserted = true; break; }
+    }
+    if (!inserted) rcnt.appendChild(agentBlock);
+  }
+
+  const body = agentBlock.querySelector('.expert-body');
+  if (!body) return;
+
+  if (ev.tool_call) {
+    const tc = ev.tool_call;
+    const toolEntry = document.createElement('div');
+    toolEntry.className = 'tool-entry';
+    toolEntry.dataset.tool = tc.name;
+    const inputPreview = JSON.stringify(tc.input).substring(0, 100);
+    toolEntry.innerHTML = `<div class="tool-call-header" onclick="this.nextElementSibling.classList.toggle('open')"><span>&#128295;</span><b>${esc(tc.name)}</b><span style="opacity:0.7;margin-left:auto;font-size:10px;">${esc(inputPreview)}...</span></div><div class="tool-result-body"><em>执行中...</em></div>`;
+    body.appendChild(toolEntry);
+  } else if (ev.tool_result) {
+    const tr = ev.tool_result;
+    const entries = body.querySelectorAll('.tool-entry:not(.done)');
+    const lastEntry = entries.length > 0 ? entries[entries.length - 1] : null;
+    if (lastEntry) {
+      const resultBody = lastEntry.querySelector('.tool-result-body');
+      if (resultBody) {
+        resultBody.textContent = (tr.output || '').substring(0, 1500);
+        lastEntry.classList.add('done');
+      }
+    }
+    // Apply code changes to editor with diff highlighting
+    if (tr.success && tr.change) {
+      if (tr.name === 'replace_code' || tr.name === 'insert_code') {
+        let file = getActiveFileSnapshot();
+        // Auto-open target file if it's not already the active tab
+        const targetPath = tr.change.file;
+        if (targetPath && (!file || !filePathMatches(file, targetPath))) {
+          file = ensureFileOpen(targetPath);
+        }
+        if (file) {
+          applyToolResultToEditor(tr.name, tr.change, file);
+        }
+      }
+    }
+  }
+
+  const history = document.getElementById('chat-history');
+  history.scrollTop = history.scrollHeight;
+}
+
+function scheduleAssistantRender(reasoning, content, isPartial=false, agent='summarizer') {
+  if (!pendingAssistantRender) pendingAssistantRender = {};
+  pendingAssistantRender[agent] = {reasoning, content, isPartial, agent};
+  if (assistantRenderTimer) return;
+  const wait = Math.max(0, 80 - (Date.now() - lastAssistantRenderAt));
+  assistantRenderTimer = setTimeout(flushAssistantRender, wait);
+}
+
+function getActiveFileSnapshot() {
+  if (activeTabIdx < 0 || activeTabIdx >= openTabs.length) return null;
+  const file = openTabs[activeTabIdx];
+  const editorEl = document.getElementById('editor');
+  if (editorEl) file.content = editorEl.value;
+  return file;
+}
+
+function filePathMatches(file, targetPath) {
+  if (!file || !targetPath) return false;
+  const fp = (file.path || file.filename || '').replace(/\\/g, '/');
+  const tp = (targetPath || '').replace(/\\/g, '/');
+  return fp === tp || fp.endsWith('/' + tp) || tp.endsWith('/' + fp);
+}
+
+function ensureFileOpen(targetPath) {
+  // Check if already open in any tab
+  for (const t of openTabs) {
+    if (filePathMatches(t, targetPath)) {
+      switchToTab(openTabs.indexOf(t));
+      return t;
+    }
+  }
+  // Find in projectFiles
+  const pf = projectFiles.find(f => filePathMatches(f, targetPath));
+  if (pf) {
+    openFileTab(pf.path || pf.filename, (pf.filename || '').split('/').pop(), pf.code, pf.language);
+    return openTabs[openTabs.length - 1];
+  }
+  // Try to read from disk via electronAPI
+  if (window.electronAPI && targetPath) {
+    const name = targetPath.split(/[\\/]/).pop() || 'untitled';
+    const lang = detectLangFromPath(targetPath);
+    openFileTab(targetPath, name, '', lang);
+    // Schedule async read
+    window.electronAPI.readFile(targetPath).then(result => {
+      if (result && !result.error && typeof result.content === 'string') {
+        const tabIdx = openTabs.findIndex(t => t.path === targetPath);
+        if (tabIdx >= 0) {
+          openTabs[tabIdx].content = result.content;
+          if (tabIdx === activeTabIdx) {
+            document.getElementById('editor').value = result.content;
+            updateLineNumbers(); updateCharCount(); renderEditorHighlight();
+          }
+        }
+      }
+    });
+    return openTabs[openTabs.length - 1];
+  }
+  return null;
+}
+
+function extractFilePath(text) {
+  // Patterns: "文件: xxx.py", "**xxx.py**", "### xxx.py", "xxx.py:42", "`xxx.py`"
+  const m = text.match(/(?:文件[：:]\s*|^###\s+)([A-Za-z0-9_/.\\-]+\.(?:py|js|ts|jsx|tsx|java|cpp|c|go|rs|rb|php|cs|html|css|json|yaml|yml|toml|md))/im);
+  if (m) return m[1];
+  const m2 = text.match(/\*\*([A-Za-z0-9_/.\\-]+\.(?:py|js|ts|jsx|tsx|java|go|rs))(?::\d+)?\*\*/);
+  if (m2) return m2[1];
+  const m3 = text.match(/([A-Za-z0-9_/.\\-]+\.(?:py|js|ts|jsx|tsx|java|go|rs))(?::\d+)?/);
+  if (m3) return m3[1];
+  const m4 = text.match(/`([A-Za-z0-9_/.\\-]+\.(?:py|js|ts|jsx|tsx|java|go|rs))`/);
+  if (m4) return m4[1];
+  return '';
+}
+
+function parseIssuesFromMarkdown(md) {
+  if (!md) return [];
+  const issues = [];
+  const lines = md.split('\n');
+  let current = null;
+  let currentFile = '';  // Track current file from section headers
+
+  const severityOf = (text) => {
+    const m = text.match(/\b(HIGH|MEDIUM|LOW|INFO)\b/i);
+    if (m) return m[1].toUpperCase();
+    if (text.includes('严重') || text.includes('高危') || text.includes('高风险')) return 'HIGH';
+    if (/中危|中等|medium/i.test(text)) return 'MEDIUM';
+    if (/低危|轻微|low/i.test(text)) return 'LOW';
+    return '';
+  };
+
+  const save = () => {
+    if (!current) return;
+    current.message = current.message.trim();
+    current.evidence = current.evidence.trim();
+    current.fix = current.fix.trim();
+    if (!current.file) current.file = currentFile;
+    // Skip issues that have no file AND don't look like real code issues
+    // (e.g., summary table rows, roadmap items, meta-commentary)
+    const hasFile = current.file && current.file !== '(unknown)';
+    const looksLikeRealIssue = /\b(?:line|行|第\s*\d+\s*行|:\d+|错误|error|bug|漏洞|crash|失败|fail|异常)\b/i.test(current.message);
+    if (hasFile || looksLikeRealIssue) {
+      if (current.message.length >= 8) issues.push(current);
+    }
+    current = null;
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    // Track file from section headers like "## models/vHeat_UNet.py" or "### engine.py"
+    const hdrFile = line.match(/^#{2,4}\s+([A-Za-z0-9_/.\\-]+\.(?:py|js|ts|jsx|tsx|java|go|rs|cpp|c|html))\s*$/);
+    if (hdrFile) {
+      currentFile = hdrFile[1];
+      save();
+      continue;
+    }
+
+    // Track file from "--- xxx.py ---" separators
+    const sepFile = line.match(/^---\s+([A-Za-z0-9_/.\\-]+\.(?:py|js|ts|jsx|tsx|java|go|rs))\s+---\s*$/);
+    if (sepFile) {
+      currentFile = sepFile[1];
+      save();
+      continue;
+    }
+
+    // Skip table rows (| ... | ... |) and score lines (数字 / 100)
+    const isTableRow = /^\|.+\|$/.test(line);
+    const isScoreLine = /^\d+\s*\/\s*100/.test(line);
+    if (isTableRow || isScoreLine) continue;
+
+    const sev = severityOf(line);
+    const startsIssue = sev || /^#{2,5}\s+/.test(line) || /^[-*]\s+/.test(line) || /^\d+[.、]\s+/.test(line);
+
+    if (startsIssue && (/问题|风险|漏洞|缺陷|bug|修复|fix|issue|error|warning/i.test(line) || sev)) {
+      save();
+      current = {
+        type: guessIssueType(line),
+        severity: sev || 'MEDIUM',
+        message: line.replace(/^#{1,6}\s+|^[-*]\s+|^\d+[.、]\s+|\[?(HIGH|MEDIUM|LOW|INFO)\]?/ig, '').trim(),
+        file: extractFilePath(line),
+        line: 0,
+        function: '',
+        evidence: '',
+        fix: '',
+        confidence: 0.8,
+      };
+      const lm = line.match(/(?:第\s*(\d+)\s*行|line[:\s]+(\d+))/i);
+      if (lm) current.line = Number(lm[1] || lm[2] || 0);
+      // Also try "file.py:42" pattern for line number
+      const flm = line.match(/([A-Za-z0-9_/.\\-]+\.(?:py|js|ts|go|rs)):(\d+)/);
+      if (flm && !current.file) current.file = flm[1];
+      if (flm && !current.line) current.line = Number(flm[2]);
+      continue;
+    }
+
+    if (!current) continue;
+    const lm = line.match(/(?:第\s*(\d+)\s*行|line[:\s]+(\d+))/i);
+    if (lm && !current.line) current.line = Number(lm[1] || lm[2] || 0);
+    // Check for file path in continuation lines
+    const fm = extractFilePath(line);
+    if (fm && !current.file) current.file = fm;
+    if (/修复|建议|fix|solution/i.test(line)) {
+      current.fix += (current.fix ? '\n' : '') + line;
+    } else if (/^```|^\s{4}|`.+`/.test(raw)) {
+      current.evidence += (current.evidence ? '\n' : '') + raw;
+    } else {
+      current.message += ' ' + line;
+    }
+  }
+  save();
+
+  if (issues.length === 0 && /修复|问题|漏洞|bug|fix|issue/i.test(md)) {
+    issues.push({
+      type: 'GENERAL_FIX',
+      severity: 'MEDIUM',
+      message: md.slice(0, 500),
+      file: extractFilePath(md) || (currentFile || ''),
+      line: 0,
+      function: '',
+      evidence: '',
+      fix: 'Apply the fixes described in the review response.',
+      confidence: 0.6,
+    });
+  }
+
+  const seen = new Set();
+  return issues.filter(issue => {
+    const key = `${issue.severity}:${issue.message.slice(0, 80)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 8);
+}
+
+function guessIssueType(text) {
+  if (/secret|token|password|密钥|密码/i.test(text)) return 'HARDCODED_SECRET';
+  if (/sql|注入|injection/i.test(text)) return 'INJECTION';
+  if (/test|测试|coverage/i.test(text)) return 'TESTING';
+  if (/性能|复杂度|performance|slow/i.test(text)) return 'PERFORMANCE';
+  if (/文档|注释|doc/i.test(text)) return 'DOCUMENTATION';
+  if (/架构|耦合|architecture/i.test(text)) return 'ARCHITECTURE';
+  return 'CODE_REVIEW_FIX';
+}
+
+// renderRepairPanel removed — repair now via chat_stream
+function _renderRepairPanel_removed(bubbleEl, issues) {
+  if (!bubbleEl || !issues || issues.length === 0) return;
+  const old = bubbleEl.querySelector('.repair-panel');
+  if (old) old.remove();
+
+  const panel = document.createElement('div');
+  panel.className = 'repair-panel';
+  panel.style.cssText = 'margin-top:10px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--surface); display:flex; flex-direction:column; gap:6px;';
+  panel.innerHTML = `<div style="font-weight:600;color:var(--text)">可修复项 (${issues.length})</div>`;
+
+  issues.forEach((issue, idx) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; gap:6px; align-items:center; font-size:12px;';
+    row.innerHTML = `
+      <span style="min-width:58px; color:${issue.severity === 'HIGH' ? 'var(--red)' : issue.severity === 'LOW' ? 'var(--blue)' : 'var(--amber)'}">${esc(issue.severity)}</span>
+      <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(issue.message)}</span>
+      <button class="repair-one" style="padding:3px 8px; border-radius:4px; border:1px solid var(--green); background:var(--green-bg); color:var(--green); cursor:pointer;">修复</button>
+    `;
+    row.querySelector('.repair-one').addEventListener('click', () => applyIssuesWithPatch([issue], row.querySelector('.repair-one')));
+    panel.appendChild(row);
+  });
+
+  const allBtn = document.createElement('button');
+  allBtn.textContent = '一键修复全部可修复项';
+  allBtn.style.cssText = 'margin-top:4px; padding:6px 10px; border-radius:4px; border:1px solid var(--green); background:var(--green-bg); color:var(--green); cursor:pointer; font-weight:600;';
+  allBtn.addEventListener('click', () => applyIssuesWithPatch(issues, allBtn));
+  panel.appendChild(allBtn);
+  bubbleEl.appendChild(panel);
+}
+
+function groupIssuesByFile(issues) {
+  const groups = {};
+  for (const issue of issues) {
+    const f = issue.file || '(unknown)';
+    if (!groups[f]) groups[f] = [];
+    groups[f].push(issue);
+  }
+  return groups;
+}
+
+function findProjectFile(filename) {
+  if (!filename || !projectFiles.length) return null;
+  const target = normalizeRelPath(filename);
+  return projectFiles.find(f =>
+    normalizeRelPath(f.filename) === target
+    || normalizeRelPath(f.filename).endsWith('/' + target)
+    || (f.filename || '').split('/').pop() === filename.split('/').pop()
+  );
+}
+
+function autoOpenFile(f) {
+  if (!f) return null;
+  const name = (f.filename || '').split('/').pop() || f.name || 'untitled';
+  const code = f.code || f.content || '';
+  const lang = f.language || 'python';
+  const path = f.path || f.filename || name;
+  const existing = openTabs.findIndex(t => t.path === path);
+  if (existing >= 0) { switchToTab(existing); return getActiveFileSnapshot(); }
+  openFileTab(path, name, code, lang);
+  return getActiveFileSnapshot();
+}
+
+// applyIssuesWithPatch removed — repair now via chat_stream
+async function _applyIssuesWithPatch_removed(issues, triggerBtn) {
+  if (!issues || issues.length === 0) {
+    alert('没有可修复项');
+    return;
+  }
+
+  const oldText = triggerBtn?.textContent;
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.textContent = 'AI 正在修复...';
+  }
+
+  const healContainer = document.getElementById('heal-container');
+  const list = document.getElementById('heal-progress-list');
+  healContainer.style.display = 'flex';
+  list.innerHTML = '';
+
+  // Group issues by file
+  const groups = groupIssuesByFile(issues);
+  const filenames = Object.keys(groups);
+
+  for (const filename of filenames) {
+    const fileIssues = groups[filename];
+    addRepairStep(list, 'thinking', `正在修复: ${filename} (${fileIssues.length} 个问题)`);
+    document.getElementById('sb-status').textContent = `AI 正在修复 ${filename}...`;
+
+    let file;
+    if (filename === '(unknown)') {
+      file = getActiveFileSnapshot();
+    } else {
+      const pf = findProjectFile(filename);
+      file = pf ? autoOpenFile(pf) : getActiveFileSnapshot();
+    }
+    if (!file) {
+      addRepairStep(list, 'error', `无法打开文件: ${filename}，跳过`);
+      continue;
+    }
+
+    try {
+      const data = await requestPatchStream(file, fileIssues, list);
+      if (data.changeCount > 0) {
+        addRepairStep(list, 'success', `${filename}: ${data.changeCount} 处修改已应用到编辑器`);
+      } else {
+        addRepairStep(list, 'thinking', `${filename}: 未检测到代码修改`);
+      }
+    } catch (e) {
+      addRepairStep(list, 'error', `${filename}: ${e.message}`);
+    }
+  }
+
+  // Show completion — changes are already visible in the editor
+  addRepairStep(list, 'success', '全部修复完成！请在编辑器中检查修改，确认后 Ctrl+S 保存。');
+  document.getElementById('btn-auto-heal').style.display = 'none';
+  document.getElementById('sb-status').textContent = '修复流程完成 — 请检查并保存';
+  if (triggerBtn) {
+    triggerBtn.disabled = false;
+    triggerBtn.textContent = oldText;
+  }
+}
+
+function addRepairStep(list, status, msg) {
+  const step = document.createElement('div');
+  const cls = status === 'error' ? 'fail' : status === 'thinking' ? 'progress' : 'success';
+  step.className = 'heal-step ' + cls;
+  step.innerHTML = `<span style="margin-right:6px;">${status === 'thinking' ? '⏳' : status === 'error' ? '✗' : '✓'}</span>${esc(msg)}`;
+  list.appendChild(step);
+  list.scrollTop = list.scrollHeight;
+}
+
+function updateLastStep(list, status, msg) {
+  const steps = list.querySelectorAll('.heal-step');
+  if (steps.length === 0) { addRepairStep(list, status, msg); return; }
+  const last = steps[steps.length - 1];
+  const cls = status === 'error' ? 'fail' : status === 'thinking' ? 'progress' : 'success';
+  last.className = 'heal-step ' + cls;
+  last.innerHTML = `<span style="margin-right:6px;">${status === 'thinking' ? '⏳' : status === 'error' ? '✗' : '✓'}</span>${esc(msg)}`;
+}
+
+// requestPatchStream removed — repair now via chat_stream
+async function _requestPatchStream_removed(file, issues, list) {
+  const res = await fetch(`${API_BASE}/api/patch/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      code: file.content,
+      language: file.language || 'python',
+      issues,
+      file_path: file.path || file.filename || '',
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  let thinkingText = '';
+  let contentText = '';
+  let thinkingStepId = null;
+  let changeCount = 0;
+  addRepairStep(list, 'thinking', 'AI 正在分析问题...');
+  thinkingStepId = list.children.length - 1;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      try {
+        const ev = JSON.parse(line.slice(6));
+
+        if (ev.event === 'thinking') {
+          thinkingText += (ev.text || '');
+          if (thinkingText.length < 200) {
+            updateStepText(list, thinkingStepId, 'thinking', '💭 ' + thinkingText.slice(-120));
+          }
+        } else if (ev.event === 'content') {
+          contentText += (ev.text || '');
+          if (contentText.length > 0 && contentText.length < 300) {
+            updateStepText(list, thinkingStepId, 'thinking', '📝 ' + contentText.slice(-150));
+          }
+        } else if (ev.event === 'tool_call') {
+          thinkingText = ''; contentText = '';
+          const label = toolLabel(ev.name, ev.input);
+          addRepairStep(list, 'thinking', label);
+          thinkingStepId = list.children.length - 1;
+        } else if (ev.event === 'tool_result') {
+          const label = toolResultLabel(ev.name, ev.output);
+          updateStepText(list, thinkingStepId, label.status || 'success', label.text);
+          // Apply successful changes to editor in real-time
+          if (label.status === 'success' && ev.change) {
+            const applied = applyToolResultToEditor(ev.name, ev.change, file);
+            if (applied) changeCount++;
+          }
+        } else if (ev.event === 'done') {
+          const statusIcon = ev.status === 'partial' ? '⚠️' : '✅';
+          addRepairStep(list, 'success', `${statusIcon} 修复完成 — ${changeCount} 处修改 — ${ev.summary || ''}`);
+          // Show save/undo buttons
+          if (changeCount > 0) {
+            _lastOriginalContent = file.content;
+            showUndoButton(file);
+            showSaveButton(file);
+          }
+        } else if (ev.event === 'error') {
+          addRepairStep(list, 'error', '❌ ' + ev.message);
+        }
+      } catch (e) {}
+    }
+  }
+
+  return { changeCount, summary: '' };
+}
+
+function updateStepText(list, stepIdx, status, text) {
+  if (stepIdx < 0 || stepIdx >= list.children.length) return;
+  const step = list.children[stepIdx];
+  const cls = status === 'error' ? 'fail' : status === 'thinking' ? 'progress' : 'success';
+  step.className = 'heal-step ' + cls;
+  const icons = { thinking: '⏳', error: '✗', success: '✓' };
+  step.innerHTML = `<span style="margin-right:6px;">${icons[status] || '✓'}</span>${esc(text)}`;
+  list.scrollTop = list.scrollHeight;
+}
+
+function toolLabel(name, input) {
+  const labels = {
+    read_file: `读取文件: ${(input.file_path || input.path || '').split('/').pop()}`,
+    replace_code: `正在修改: ${(input.file_path || '').split('/').pop()}`,
+    insert_code: `正在插入代码到: ${(input.file_path || '').split('/').pop()}`,
+    write_file: `写入文件: ${(input.file_path || '').split('/').pop()}`,
+    run_linter: '正在运行 linter 检查...',
+    run_tests: `正在运行测试: ${(input.test_path || '').split('/').pop()}`,
+    list_tests: '正在发现测试文件...',
+    generate_diff: '正在生成 diff...',
+    parse_ast: '正在解析 AST 结构...',
+    undo_last_change: '正在撤销上次修改...',
+  };
+  return labels[name] || `${name}`;
+}
+
+function toolResultLabel(name, output) {
+  try {
+    const o = typeof output === 'string' ? JSON.parse(output) : output;
+
+    if (name === 'run_linter') {
+      const issues = o.issues || [];
+      if (issues.length === 0) return { status: 'success', text: 'Linter 通过 ✓ — 0 个问题' };
+      const hi = issues.filter(i => i.severity === 'ERROR' || i.severity === 'HIGH');
+      return {
+        status: hi.length > 0 ? 'thinking' : 'success',
+        text: `Linter 发现 ${issues.length} 个问题${hi.length > 0 ? ' (含 ' + hi.length + ' 个严重问题)，正在修正...' : ' (均为低级别，继续)'}`,
+      };
+    }
+    if (name === 'run_tests') {
+      if (o.success) return { status: 'success', text: '测试通过 ✓' };
+      return { status: 'thinking', text: '测试失败，正在分析原因...' };
+    }
+    if (name === 'replace_code') {
+      if (o.success) return { status: 'success', text: '1 处替换完成' };
+      return { status: 'thinking', text: '替换失败: ' + (o.error || '未知错误') + ', 重新定位中...' };
+    }
+    if (name === 'insert_code') {
+      if (o.success) return { status: 'success', text: `代码已插入第 ${o.inserted_at_line || '?'} 行` };
+      return { status: 'thinking', text: '插入失败: ' + (o.error || '未知错误') };
+    }
+    if (name === 'write_file') {
+      if (o.success) return { status: 'success', text: '文件已写入磁盘' };
+      return { status: 'error', text: '写入失败: ' + (o.error || '未知错误') };
+    }
+    if (name === 'list_tests') {
+      return { status: 'success', text: `发现 ${o.total || 0} 个测试文件` };
+    }
+    if (name === 'read_file') {
+      return { status: 'success', text: `读取完成 (${o.total_lines || '?'} 行)` };
+    }
+  } catch (e) {}
+  return { status: 'success', text: '完成' };
+}
+
+function renderReplacementDiff(oldStr, newStr, lineHint) {
+  // Generate a simple side-by-side visual of the change
+  const oldLines = (oldStr || '').split('\n');
+  const newLines = (newStr || '').split('\n');
+  let html = '<div class="diff-viewer">';
+  if (lineHint) {
+    html += `<div class="diff-line diff-hunk">@@ 第 ${lineHint} 行附近 @@</div>`;
+  }
+  for (const l of oldLines) {
+    html += `<div class="diff-line diff-del">- ${esc(l)}</div>`;
+  }
+  for (const l of newLines) {
+    html += `<div class="diff-line diff-add">+ ${esc(l)}</div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function showRepairPreview(file, replacements, summary) {
+  const healContainer = document.getElementById('heal-container');
+  const list = document.getElementById('heal-progress-list');
+  healContainer.style.display = 'flex';
+
+  const box = document.createElement('div');
+  box.className = 'heal-step success';
+  box.style.cssText = 'padding:10px; margin-top:8px;';
+
+  // Render each replacement as a mini diff
+  let diffsHtml = '';
+  for (let i = 0; i < replacements.length; i++) {
+    const r = replacements[i];
+    const desc = r.description || r.issue_type || `替换 ${i + 1}`;
+    diffsHtml += `<div style="margin-bottom:10px;border:1px solid var(--border);border-radius:4px;overflow:hidden;">
+      <div style="padding:4px 8px;background:var(--surface);font-size:11px;font-weight:600;color:var(--text-dim);">${esc(desc)}</div>
+      ${renderReplacementDiff(r.old_string, r.new_string, r.line_hint)}
+    </div>`;
+  }
+
+  box.innerHTML = `
+    <div style="font-weight:600;margin-bottom:8px;color:var(--green);">补丁预览: ${esc(file.name)} — ${replacements.length} 处精确替换</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">${esc(summary || '')}</div>
+    ${diffsHtml}
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="apply-repair" style="padding:6px 12px;border-radius:4px;border:1px solid var(--green);background:var(--green-bg);color:var(--green);cursor:pointer;font-weight:600;">应用全部替换</button>
+      <button class="cancel-repair" style="padding:6px 12px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;">取消</button>
+    </div>
+  `;
+
+  const statusEl = document.createElement('div');
+  statusEl.style.cssText = 'margin-top:8px;font-size:12px;';
+  box.appendChild(statusEl);
+
+  box.querySelector('.apply-repair').addEventListener('click', async () => {
+    const result = await applyReplacements(file, replacements, statusEl);
+    if (result.success) {
+      // Hide just this preview box, not the whole container
+      box.querySelector('.apply-repair').disabled = true;
+      box.querySelector('.apply-repair').textContent = '✓ 已应用';
+      box.querySelector('.apply-repair').style.opacity = '0.6';
+      box.querySelector('.cancel-repair').remove();
+      document.getElementById('sb-status').textContent = `已应用 ${result.applied} 处替换`;
+    }
+  });
+  box.querySelector('.cancel-repair').addEventListener('click', () => {
+    // Only remove this preview box
+    box.remove();
+    // Hide container if no more previews
+    if (list.querySelectorAll('.heal-step.success').length === 0) {
+      healContainer.style.display = 'none';
+    }
+  });
+  list.appendChild(box);
+}
+
+function applyToolResultToEditor(name, change, file) {
+  if (!change || !change.success) return false;
+
+  const editor = document.getElementById('editor');
+  // Sync editor content from file object if they differ (file was just auto-opened)
+  if (file && typeof file.content === 'string' && editor.value !== file.content) {
+    editor.value = file.content;
+  }
+  const current = editor.value;
+
+  if (name === 'replace_code' && change.old_string && change.new_string) {
+    const count = countOccurrences(current, change.old_string);
+    if (count !== 1) {
+      console.warn('applyToolResult: old_string matched', count, 'times, skipping');
+      return false;
+    }
+    editor.value = current.replace(change.old_string, change.new_string);
+    pendingChanges.push({
+      id: Date.now(),
+      file: file,
+      lineStart: (change.line_number || 1) - 1,
+      lineEnd: (change.line_number || 1) - 1 + (change.new_string.match(/\n/g) || []).length,
+      type: 'replace',
+      oldString: change.old_string,
+      newString: change.new_string,
+    });
+    refreshDiffHighlights();
+    file.content = editor.value;
+    // Sync openTabs so tab switch doesn't revert
+    const tabIdx = openTabs.findIndex(t => filePathMatches(t, file.path));
+    if (tabIdx >= 0) openTabs[tabIdx].content = editor.value;
+    return true;
+  }
+
+  if (name === 'insert_code' && change.code && change.inserted_at_line != null) {
+    const lines = current.split('\n');
+    lines.splice(change.inserted_at_line, 0, change.code);
+    editor.value = lines.join('\n');
+    pendingChanges.push({
+      id: Date.now(),
+      file: file,
+      lineStart: change.inserted_at_line - 1,
+      lineEnd: change.inserted_at_line - 1 + (change.code.match(/\n/g) || []).length,
+      type: 'insert',
+      oldString: '',
+      newString: change.code,
+    });
+    refreshDiffHighlights();
+    file.content = editor.value;
+    const tabIdx = openTabs.findIndex(t => filePathMatches(t, file.path));
+    if (tabIdx >= 0) openTabs[tabIdx].content = editor.value;
+    return true;
+  }
+
+  if (name === 'write_file' && change.file) {
+    const pf = findProjectFile(change.file);
+    if (!pf) {
+      const name = (change.file || '').split('/').pop() || 'untitled';
+      const lang = detectLangFromPath(change.file);
+      const content = change.content || '';
+      // Preview mode: add to pendingFiles, show [待确认] tab, all green
+      const pfEntry = { id: Date.now(), path: change.file, name: name, content: content, language: lang, type: 'create' };
+      pendingFiles.push(pfEntry);
+      openFileTab('[pending]' + change.file, '[待确认] ' + name, content, lang);
+      // Mark entire file green
+      if (content) {
+        pendingChanges.push({
+          id: pfEntry.id,
+          file: pfEntry,
+          lineStart: 0,
+          lineEnd: (content.match(/\n/g) || []).length,
+          type: 'insert',
+          oldString: '',
+          newString: content,
+        });
+      }
+      refreshDiffHighlights();
+    }
+    return true;
+  }
+
+  if (name === 'delete_file' && change.file && change.success) {
+    // Preview mode: add to pendingFiles with oldContent, show [待删除] tab, all red
+    const content = change.deleted_content || '';
+    const name = (change.file || '').split('/').pop() || 'untitled';
+    const lang = detectLangFromPath(change.file);
+    const pfEntry = { id: Date.now(), path: change.file, name: name, content: content, language: lang, type: 'delete', oldContent: content, oldPath: change.file };
+    pendingFiles.push(pfEntry);
+    // Open the target file in a preview tab
+    const existing = openTabs.findIndex(t => t.path === change.file);
+    if (existing >= 0) {
+      switchToTab(existing);
+    } else {
+      openFileTab('[pending]' + change.file, '[待删除] ' + name, content, lang);
+    }
+    // Mark entire file red
+    if (content) {
+      pendingChanges.push({
+        id: pfEntry.id,
+        file: pfEntry,
+        lineStart: 0,
+        lineEnd: (content.match(/\n/g) || []).length,
+        type: 'delete',
+        oldString: content,
+        newString: '',
+      });
+    }
+    refreshDiffHighlights();
+    return true;
+  }
+
+  return false;
+}
+
+function refreshDiffHighlights() {
+  const totalChanges = pendingChanges.length;
+  const totalFiles = pendingFiles.length;
+  const bar = document.getElementById('diff-action-bar');
+  if (totalChanges > 0 || totalFiles > 0) {
+    bar.style.display = 'flex';
+    let parts = [];
+    if (totalChanges > 0) parts.push(`${totalChanges} 处代码改动`);
+    const creates = pendingFiles.filter(f => f.type === 'create').length;
+    const deletes = pendingFiles.filter(f => f.type === 'delete').length;
+    if (creates > 0) parts.push(`${creates} 个新建文件`);
+    if (deletes > 0) parts.push(`${deletes} 个待删除`);
+    document.getElementById('diff-summary').textContent = parts.join(' · ');
+  } else {
+    bar.style.display = 'none';
+  }
+
+  // Build ranges only for the active tab's file
+  const ranges = [];
+  const activeFile = getActiveFileSnapshot();
+  for (const c of pendingChanges) {
+    if (activeFile && c.file && !filePathMatches(c.file, activeFile.path || activeFile.filename || '')) continue;
+    if (c.type === 'replace') {
+      const oldLines = (c.oldString.match(/\n/g) || []).length;
+      if (oldLines > 0 || c.oldString.length > 0) {
+        ranges.push({startLine: c.lineStart, endLine: c.lineStart + oldLines, type: 'del', changeId: c.id});
+      }
+      const newLines = (c.newString.match(/\n/g) || []).length;
+      ranges.push({startLine: c.lineStart, endLine: c.lineStart + newLines, type: 'add', changeId: c.id});
+    } else if (c.type === 'delete') {
+      ranges.push({startLine: c.lineStart, endLine: c.lineEnd, type: 'del', changeId: c.id});
+    } else {
+      ranges.push({startLine: c.lineStart, endLine: c.lineEnd, type: 'add', changeId: c.id});
+    }
+  }
+  updateLineNumbers(ranges);
+  renderEditorHighlight(ranges);
+}
+
+function applyAllChanges() {
+  // Confirm all file operations
+  for (const pf of pendingFiles) {
+    if (pf.type === 'create') confirmFileCreate(pf.id, /*silent*/true);
+    else if (pf.type === 'delete') confirmFileDelete(pf.id, /*silent*/true);
+  }
+  pendingChanges = [];
+  document.getElementById('diff-action-bar').style.display = 'none';
+  updateLineNumbers(); updateCharCount(); renderEditorHighlight();
+}
+
+function undoAllChanges() {
+  const editor = document.getElementById('editor');
+  // Undo code changes in reverse order
+  for (let i = pendingChanges.length - 1; i >= 0; i--) {
+    const c = pendingChanges[i];
+    if (c.type === 'delete') continue; // handled by cancelFileDelete
+    const tab = openTabs.find(t => t.path === c.file.path);
+    if (c.type === 'replace') {
+      editor.value = editor.value.replace(c.newString, c.oldString);
+    } else if (c.type === 'insert') {
+      editor.value = editor.value.replace(c.newString, '');
+    }
+    if (tab) tab.content = editor.value;
+    if (c.file) c.file.content = editor.value;
+  }
+  // Cancel all file operations
+  for (const pf of [...pendingFiles].reverse()) {
+    if (pf.type === 'create') cancelFileCreate(pf.id);
+    else if (pf.type === 'delete') cancelFileDelete(pf.id);
+  }
+  pendingChanges = [];
+  document.getElementById('diff-action-bar').style.display = 'none';
+  updateLineNumbers(); updateCharCount(); renderEditorHighlight();
+}
+
+function undoChange(id) {
+  // Check if this id belongs to a file-level operation
+  const pfIdx = pendingFiles.findIndex(f => f.id === id);
+  if (pfIdx >= 0) {
+    const pf = pendingFiles[pfIdx];
+    if (pf.type === 'create') cancelFileCreate(id);
+    else if (pf.type === 'delete') cancelFileDelete(id);
+    return;
+  }
+  const idx = pendingChanges.findIndex(c => c.id === id);
+  if (idx < 0) return;
+  const c = pendingChanges[idx];
+  const editor = document.getElementById('editor');
+  if (c.type === 'replace') editor.value = editor.value.replace(c.newString, c.oldString);
+  else if (c.type === 'insert') editor.value = editor.value.replace(c.newString, '');
+  if (c.file) c.file.content = editor.value;
+  pendingChanges.splice(idx, 1);
+  if (pendingChanges.length === 0 && pendingFiles.length === 0) document.getElementById('diff-action-bar').style.display = 'none';
+  refreshDiffHighlights();
+}
+
+function acceptChange(id) {
+  // Check if this id belongs to a file-level operation
+  const pfIdx = pendingFiles.findIndex(f => f.id === id);
+  if (pfIdx >= 0) {
+    const pf = pendingFiles[pfIdx];
+    if (pf.type === 'create') confirmFileCreate(id);
+    else if (pf.type === 'delete') confirmFileDelete(id);
+    return;
+  }
+  const idx = pendingChanges.findIndex(c => c.id === id);
+  if (idx < 0) return;
+  pendingChanges.splice(idx, 1);
+  if (pendingChanges.length === 0 && pendingFiles.length === 0) document.getElementById('diff-action-bar').style.display = 'none';
+  refreshDiffHighlights();
+}
+
+function confirmFileCreate(id, silent) {
+  const idx = pendingFiles.findIndex(f => f.id === id);
+  if (idx < 0) return;
+  const pf = pendingFiles[idx];
+  // Actually add to projectFiles
+  const newFile = { filename: pf.path, path: pf.path, code: pf.content, language: pf.language };
+  projectFiles.push(newFile);
+  // Replace [pending] tab with real tab
+  const tabIdx = openTabs.findIndex(t => t.path === '[pending]' + pf.path);
+  if (tabIdx >= 0) {
+    openTabs[tabIdx].path = pf.path;
+    openTabs[tabIdx].name = pf.name;
+    openTabs[tabIdx].content = pf.content;
+    renderTabs();
+  }
+  // Remove file-level pendingChange
+  pendingChanges = pendingChanges.filter(c => c.id !== id);
+  pendingFiles.splice(idx, 1);
+  if (pendingChanges.length === 0 && pendingFiles.length === 0) {
+    document.getElementById('diff-action-bar').style.display = 'none';
+  }
+  // Refresh explorer tree
+  refreshFileTree();
+  if (!silent) refreshDiffHighlights();
+}
+
+function cancelFileCreate(id) {
+  const idx = pendingFiles.findIndex(f => f.id === id);
+  if (idx < 0) return;
+  const pf = pendingFiles[idx];
+  // Close preview tab
+  const tabIdx = openTabs.findIndex(t => t.path === '[pending]' + pf.path);
+  if (tabIdx >= 0) closeTab(tabIdx);
+  pendingChanges = pendingChanges.filter(c => c.id !== id);
+  pendingFiles.splice(idx, 1);
+  if (pendingChanges.length === 0 && pendingFiles.length === 0) {
+    document.getElementById('diff-action-bar').style.display = 'none';
+  }
+  refreshDiffHighlights();
+}
+
+function confirmFileDelete(id, silent) {
+  const idx = pendingFiles.findIndex(f => f.id === id);
+  if (idx < 0) return;
+  const pf = pendingFiles[idx];
+  // Remove from projectFiles
+  projectFiles = projectFiles.filter(f => f.path !== pf.oldPath && f.filename !== pf.oldPath);
+  // Close the preview tab
+  const tabIdx = openTabs.findIndex(t => t.path === '[pending]' + pf.oldPath || t.path === pf.oldPath);
+  if (tabIdx >= 0) closeTab(tabIdx);
+  pendingChanges = pendingChanges.filter(c => c.id !== id);
+  pendingFiles.splice(idx, 1);
+  if (pendingChanges.length === 0 && pendingFiles.length === 0) {
+    document.getElementById('diff-action-bar').style.display = 'none';
+  }
+  // Refresh explorer tree
+  refreshFileTree();
+  if (!silent) { updateLineNumbers(); renderEditorHighlight(); }
+}
+
+function cancelFileDelete(id) {
+  const idx = pendingFiles.findIndex(f => f.id === id);
+  if (idx < 0) return;
+  const pf = pendingFiles[idx];
+  // Restore original tab name
+  const tabIdx = openTabs.findIndex(t => t.path === '[pending]' + pf.oldPath);
+  if (tabIdx >= 0) {
+    openTabs[tabIdx].path = pf.oldPath;
+    openTabs[tabIdx].name = pf.name;
+    renderTabs();
+  }
+  pendingChanges = pendingChanges.filter(c => c.id !== id);
+  pendingFiles.splice(idx, 1);
+  if (pendingChanges.length === 0 && pendingFiles.length === 0) {
+    document.getElementById('diff-action-bar').style.display = 'none';
+  }
+  refreshDiffHighlights();
+}
+
+function detectLangFromPath(filePath) {
+  const ext = (filePath || '').split('.').pop().toLowerCase();
+  const m = { py:'python', js:'javascript', ts:'typescript', jsx:'javascript', tsx:'typescript',
+              java:'java', cpp:'cpp', c:'c', go:'go', rs:'rust', html:'html', css:'css', json:'json' };
+  return m[ext] || 'plaintext';
+}
+
+async function applyReplacements(file, replacements, statusEl) {
+  const content = document.getElementById('editor').value || file.content || '';
+  let current = content;
+  const applied = [];
+  const backups = [];
+
+  for (let i = 0; i < replacements.length; i++) {
+    const r = replacements[i];
+    if (!r.old_string) {
+      statusEl.innerHTML = `<span style="color:var(--red);">✗ 替换 ${i + 1}/${replacements.length} 失败: old_string 为空</span>`;
+      return { success: false, applied: 0 };
+    }
+    // Size guard: if replacing entire file, new content must be at least 40% of original
+    if (r.old_string === content && r.new_string.length < content.length * 0.4 && content.length > 500) {
+      statusEl.innerHTML = `<span style="color:var(--red);">✗ 替换 ${i + 1}/${replacements.length} 拒绝: 新内容仅 ${r.new_string.length} 字符（原始 ${content.length} 字符），可能是代码片段而非完整文件</span>`;
+      return { success: false, applied: 0 };
+    }
+    const count = countOccurrences(current, r.old_string);
+
+    if (count === 0) {
+      statusEl.innerHTML = `<span style="color:var(--red);">✗ 替换 ${i + 1}/${replacements.length} 失败: old_string 在文件中未找到。可能文件已被修改。</span>`;
+      // Rollback
+      for (let j = applied.length - 1; j >= 0; j--) {
+        current = backups[j];
+      }
+      document.getElementById('editor').value = current;
+      updateLineNumbers(); updateCharCount(); renderEditorHighlight();
+      return { success: false, applied: 0 };
+    }
+
+    if (count > 1) {
+      statusEl.innerHTML = `<span style="color:var(--red);">✗ 替换 ${i + 1}/${replacements.length} 失败: old_string 匹配了 ${count} 处（必须唯一）。需要更多上下文。</span>`;
+      for (let j = applied.length - 1; j >= 0; j--) {
+        current = backups[j];
+      }
+      document.getElementById('editor').value = current;
+      updateLineNumbers(); updateCharCount(); renderEditorHighlight();
+      return { success: false, applied: 0 };
+    }
+
+    // Save backup and apply
+    backups.push(current);
+    current = current.replace(r.old_string, r.new_string);
+    applied.push(i);
+    statusEl.innerHTML = `<span style="color:var(--green);">✓ 替换 ${i + 1}/${replacements.length} 完成</span>`;
+  }
+
+  // All applied — update editor
+  _lastOriginalContent = file.content;
+  file.content = current;
+  document.getElementById('editor').value = current;
+  updateLineNumbers(); updateCharCount(); renderEditorHighlight();
+  document.getElementById('sb-status').textContent = `已应用 ${applied.length} 处替换 — 请检查后保存`;
+  showUndoButton(file);
+  showSaveButton(file);
+  return { success: true, applied: applied.length };
+}
+
+function countOccurrences(text, substr) {
+  if (!substr) return 1; // empty string → skip uniqueness check
+  let count = 0, pos = 0;
+  while ((pos = text.indexOf(substr, pos)) !== -1) { count++; pos += substr.length || 1; }
+  return count;
+}
+
+let _lastOriginalContent = null;  // Backup before applying a fix
+
+async function writeFixedCodeToFile(file, fixedCode) {
+  // Validate: don't apply empty or suspiciously short fixes
+  if (!fixedCode || fixedCode.trim().length < 10) {
+    alert('修复代码为空或过短，已拒绝应用。请检查 diff 预览。');
+    return;
+  }
+  // Warn if fix looks like a partial snippet (no function/class/import structure)
+  const codeLines = fixedCode.trim().split('\n').length;
+  const origLines = (file.content || '').split('\n').length;
+  if (codeLines < origLines * 0.3 && origLines > 30) {
+    if (!confirm(`修复后代码仅 ${codeLines} 行（原始 ${origLines} 行），可能是片段而非完整文件。确定应用吗？`)) return;
+  }
+
+  // Save backup before modifying
+  _lastOriginalContent = file.content;
+
+  // Update editor only (don't write to disk automatically)
+  file.content = fixedCode;
+  document.getElementById('editor').value = fixedCode;
+  updateLineNumbers();
+  updateCharCount();
+  renderEditorHighlight();
+  document.getElementById('sb-status').textContent = '已应用到编辑器（原内容已备份，可点击「撤销」恢复）';
+
+  // Show undo button
+  showUndoButton(file);
+}
+
+function showSaveButton(file) {
+  const old = document.getElementById('save-repair-btn');
+  if (old) old.remove();
+
+  const healContainer = document.getElementById('heal-container');
+  const btn = document.createElement('button');
+  btn.id = 'save-repair-btn';
+  btn.textContent = '💾 保存到磁盘';
+  btn.style.cssText = 'margin-top:6px; padding:6px 12px; border-radius:4px; border:1px solid var(--green); background:var(--green-bg); color:var(--green); cursor:pointer; font-weight:600; width:100%;';
+  btn.addEventListener('click', async () => {
+    await saveCurrentFile(file);
+    btn.textContent = '✓ 已保存';
+    btn.style.opacity = '0.7';
+    setTimeout(() => { btn.remove(); }, 2000);
+  });
+  healContainer.appendChild(btn);
+}
+
+async function saveCurrentFile(file) {
+  if (window.electronAPI && file.path && (file.path.includes('\\') || file.path.includes('/'))) {
+    const result = await window.electronAPI.writeFile(file.path, file.content);
+    if (result?.error) {
+      document.getElementById('sb-status').textContent = '保存失败: ' + result.error;
+      return;
+    }
+    document.getElementById('sb-status').textContent = '已保存到磁盘: ' + file.name;
+    // Clear backup since we've persisted
+    _lastOriginalContent = null;
+    // Remove undo button
+    const undoBtn = document.getElementById('undo-repair-btn');
+    if (undoBtn) undoBtn.remove();
+  } else {
+    document.getElementById('sb-status').textContent = '已保存到编辑器（非 Electron 模式，未写磁盘）';
+  }
+}
+
+function showUndoButton(file) {
+  // Remove any existing undo button
+  const old = document.getElementById('undo-repair-btn');
+  if (old) old.remove();
+
+  const healContainer = document.getElementById('heal-container');
+  const btn = document.createElement('button');
+  btn.id = 'undo-repair-btn';
+  btn.textContent = '↩ 撤销修改';
+  btn.style.cssText = 'margin-top:6px; padding:6px 12px; border-radius:4px; border:1px solid var(--red); background:var(--red-bg); color:var(--red); cursor:pointer; font-weight:600; width:100%;';
+  btn.addEventListener('click', () => {
+    if (_lastOriginalContent) {
+      file.content = _lastOriginalContent;
+      document.getElementById('editor').value = _lastOriginalContent;
+      updateLineNumbers();
+      updateCharCount();
+      renderEditorHighlight();
+      document.getElementById('sb-status').textContent = '已撤销修改';
+      _lastOriginalContent = null;
+    }
+    btn.remove();
+  });
+  healContainer.appendChild(btn);
+}
+
+function normalizeRelPath(path) {
+  return (path || '').replace(/\\/g, '/').replace(/^\.?\//, '').toLowerCase();
+}
+
+function findRequestedFile(message, files) {
+  if (!message || !files || files.length === 0) return null;
+  const msg = normalizeRelPath(message);
+  const candidates = [];
+
+  // Match path-like patterns with extension (e.g. "backend/tools/llm.py")
+  const pathMatches = message.match(/[A-Za-z0-9_.-]+(?:[\\/][A-Za-z0-9_.-]+)+\.[A-Za-z0-9]+/g) || [];
+  for (const p of pathMatches) {
+    candidates.push(normalizeRelPath(p));
+  }
+
+  // Match filenames with extension (all common code extensions)
+  const extList = '(?:py|js|ts|jsx|tsx|java|cpp|c|h|hpp|go|rs|rb|php|cs|swift|kt|scala|vue|svelte|html|css|scss|json|yaml|yml|toml|md|txt|sh|bat|ps1|sql|r|m|lua|dart)';
+  const fileRe = new RegExp('[A-Za-z0-9_.-]+\\.' + extList, 'gi');
+  const fileMatches = message.match(fileRe) || [];
+  for (const p of fileMatches) {
+    candidates.push(normalizeRelPath(p));
+  }
+
+  // Match extensionless filenames mentioned without extension (e.g. "看看tool_registry")
+  // Look for CamelCase or snake_case identifiers that match actual file stems
+  const stemMatches = message.match(/[A-Z][a-z]+(?:[A-Z][a-z]+)+|[a-z]+(?:_[a-z]+)+/g) || [];
+  for (const stem of stemMatches) {
+    candidates.push(normalizeRelPath(stem));
+  }
+
+  const folderMatch = msg.match(/([a-z0-9_.-]+)\s*(?:文件夹|目录|folder|dir)/i);
+  const folderHint = folderMatch ? folderMatch[1] : '';
+
+  let best = null;
+  let bestScore = 0;
+  for (const file of files) {
+    const rel = normalizeRelPath(file.filename || file.name || file.path);
+    const base = rel.split('/').pop();
+    const stem = base.replace(/\.[^.]+$/, ''); // filename without extension
+    let score = 0;
+
+    for (const c of candidates) {
+      if (rel === c) score += 100;
+      else if (rel.endsWith('/' + c)) score += 80;
+      else if (base === c) score += 60;
+      else if (stem === c) score += 60; // extensionless match
+      else if (rel.includes(c)) score += 40;
+      else if (stem.includes(c) || c.includes(stem)) score += 25;
+    }
+
+    if (folderHint && rel.includes('/' + folderHint + '/')) score += 15;
+    if (msg.includes(rel)) score += 100;
+    if (base && msg.includes(base)) score += 40;
+    if (stem && msg.includes(stem)) score += 35;
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = file;
+    }
+  }
+
+  return bestScore > 0 ? best : null;
+}
+
+async function sendChatMessage() {
+  const textarea = document.getElementById('chat-textarea');
+  const text = textarea.value.trim();
+  if (!text) return;
+
+  textarea.value = '';
+  document.getElementById('send-chat-btn').disabled = true;
+
+  chatMessages.push({role: 'user', content: text});
+  saveChatHistory();
+  appendChatBubble('user', text);
+
+  // Loading indicator bubble
+  updateAssistantBubble('', '...', true);
+  document.getElementById('sb-status').textContent = 'AI 思考中...';
+
+  const currentFile = getActiveFileSnapshot();
+  let primary_file_str = currentFile ? currentFile.path.replace(projectRoot, '').replace(/^[\\/]/, '').replace(/\\/g, '/') : '';
+  
+  let reqBody = {
+    messages: chatMessages,
+    primary_file: primary_file_str,
+    workspace_root: projectRoot || '',
+    files: []
+  };
+
+  if (projectRoot && window.electronAPI) {
+    try {
+      const pFiles = await window.electronAPI.collectProjectFiles(projectRoot, 120);
+      projectFiles = pFiles;
+      const requested = findRequestedFile(text, pFiles);
+      if (requested) {
+        primary_file_str = requested.filename;
+        reqBody.primary_file = requested.filename;
+        document.getElementById('sb-status').textContent = '已定位文件: ' + requested.filename;
+        const tabIdx = openTabs.findIndex(t => normalizeRelPath(t.path).endsWith(normalizeRelPath(requested.filename)));
+        if (tabIdx < 0 && requested.path) {
+          openFileTab(requested.path, requested.filename.split('/').pop(), requested.code, requested.language);
+        }
+      }
+      reqBody.files = pFiles.map(f => ({filename: f.filename, code: f.code, language: f.language}));
+    } catch(e) {}
+  } else if (currentFile) {
+      reqBody.files = [{filename: currentFile.name, code: currentFile.content, language: currentFile.language}];
+  }
+
+  let aiContent = '';
+  let aiReasoning = '';
+  let expertThoughts = {}; // {reviewer: '...', security: '...'}
+
+  try {
+    const res = await fetch(`${API_BASE}/api/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reqBody)
+    });
+    if (!res.ok) throw new Error(res.statusText);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while(true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // save incomplete line
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const ev = JSON.parse(line.slice(6));
+
+          // Capture auto-detected primary file from preprocess event
+          if (ev.agent === 'preprocess' && ev.primary_file && projectFiles.length > 0) {
+            const target = normalizeRelPath(ev.primary_file);
+            const pf = projectFiles.find(f =>
+              normalizeRelPath(f.filename) === target
+              || normalizeRelPath(f.filename).endsWith('/' + target)
+            );
+            if (pf) lastPrimaryFile = pf;
+          }
+
+          if (ev.reasoning || ev.chunk) {
+            const aid = ev.agent || 'summarizer';
+            if (ev.chunk) aiContent += ev.chunk;
+
+            if (aid === 'summarizer') {
+              if (ev.reasoning) aiReasoning += ev.reasoning;
+              scheduleAssistantRender(aiReasoning, aiContent, true, 'summarizer');
+            } else {
+              const text = ev.reasoning || ev.chunk;
+              expertThoughts[aid] = (expertThoughts[aid] || '') + text;
+              scheduleAssistantRender(expertThoughts[aid], aiContent, true, aid);
+            }
+          } else if (ev.tool_call || ev.tool_result) {
+            const aid = ev.agent || 'summarizer';
+            if (aid !== 'summarizer') {
+              scheduleToolRender(aid, ev);
+            }
+          }
+        } catch(e) {}
+      }
+    }
+    flushAssistantRender();
+    
+    // Done streaming
+    let aBubble = document.getElementById('streaming-bubble-assistant');
+    if (aBubble) aBubble.id = '';
+    
+    chatMessages.push({role: 'assistant', content: aiContent});
+    saveChatHistory();
+    autoSaveChat();
+    lastReviewContent = aiContent;
+
+    // Skip issue parsing for repair plans (they use a different format)
+    const isRepairPlan = /修复计划|fix plan|repair plan/i.test(aiContent);
+    if (!isRepairPlan) {
+      lastReviewIssues = parseIssuesFromMarkdown(aiContent);
+      if (primary_file_str && projectFiles.length > 0) {
+        const pf = projectFiles.find(f => f.filename === primary_file_str || normalizeRelPath(f.filename) === normalizeRelPath(primary_file_str));
+        if (pf) lastPrimaryFile = pf;
+      }
+      if (lastReviewIssues.length > 0 && aBubble) {
+        const fixHint = document.createElement('div');
+        fixHint.style.cssText = 'margin-top:8px; font-size:12px; color:var(--text-dim);';
+        fixHint.textContent = `发现 ${lastReviewIssues.length} 个问题。在下方输入"修复"来描述你想修复的问题。`;
+        aBubble.appendChild(fixHint);
+      }
+    } else if (aBubble) {
+      // For repair plans: show execution hint
+      const planHint = document.createElement('div');
+      planHint.style.cssText = 'margin-top:8px; font-size:12px; color:var(--text-dim);';
+      planHint.textContent = '输入"执行第1轮"或"修复 #1"来逐步执行修复计划。';
+      aBubble.appendChild(planHint);
+    }
+    document.getElementById('sb-status').textContent = '响应完毕';
+
+  } catch(e) {
+    updateAssistantBubble('', '连接失败或内部错误: ' + e.message, true);
+    let aBubble = document.getElementById('streaming-bubble-assistant');
+    if (aBubble) aBubble.id = '';
+    document.getElementById('sb-status').textContent = '错误';
+  }
+
+  document.getElementById('send-chat-btn').disabled = false;
+  
+  textarea.focus();
+}
+
+// triggerHeal removed — repair now via chat_stream
+async function _triggerHeal_removed() {
+    const issues = lastReviewIssues.length > 0
+        ? lastReviewIssues
+        : parseIssuesFromMarkdown(lastReviewContent || chatMessages.at(-1)?.content || '');
+    if (issues.length === 0) {
+        alert('没有找到可修复项，请先让 AI 给出审查结果');
+        return;
+    }
+
+    // Group issues by file. If any issue already has a file field, use it.
+    const groups = groupIssuesByFile(issues);
+
+    // Pre-open files: for each file with issues, try to find and open it
+    const filenames = Object.keys(groups);
+    let openedAny = false;
+    for (const filename of filenames) {
+        if (filename === '(unknown)') continue;
+        const pf = findProjectFile(filename);
+        if (pf) {
+            autoOpenFile(pf);
+            openedAny = true;
+        }
+    }
+
+    // If no file was opened by filename matching, try fallbacks
+    if (!openedAny) {
+        let currentFile = getActiveFileSnapshot();
+        if (!currentFile && lastPrimaryFile) autoOpenFile(lastPrimaryFile);
+        currentFile = getActiveFileSnapshot();
+        if (!currentFile && projectFiles.length > 0) {
+            // Auto-detect best file
+            let best = null, bestScore = -1;
+            for (const f of projectFiles) {
+                let score = (f.code.match(/^def /gm) || []).length * 2;
+                score += (f.code.split('\n').length) * 0.1;
+                const base = (f.filename || '').split('/').pop().toLowerCase();
+                if (base.startsWith('main') || base.startsWith('app') || base.startsWith('index')) score += 20;
+                if (score > bestScore) { bestScore = score; best = f; }
+            }
+            if (best) autoOpenFile(best);
+        }
+        if (!getActiveFileSnapshot() && projectFiles.length > 0) autoOpenFile(projectFiles[0]);
+        if (!getActiveFileSnapshot()) {
+            alert('未找到可修复的文件。请在左侧文件树中点击一个文件打开后再试。');
+            return;
+        }
+    }
+
+    await applyIssuesWithPatch(issues, document.getElementById('btn-auto-heal'));
+}
+
+// Helpers (scoreColor, esc, markdownToHtml, highlightPython) are in js/utils.js
+// API layer (API_BASE, streamWithRetry) in js/api.js
+
+// Keyboard Shortcuts
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'o' && !e.shiftKey) {
+    e.preventDefault(); openFolder();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'o' && e.shiftKey) {
+    e.preventDefault(); openSingleFile();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    const file = getActiveFileSnapshot();
+    if (file) saveCurrentFile(file);
+  }
+});
+
+// Resizer
+function initResizer() {
+  const resizer = document.getElementById('v-resizer');
+  const reviewPanel = document.querySelector('.review-panel');
+  const editorPanel = document.querySelector('.editor-panel');
+  let isDragging = false;
+
+  resizer.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    editorPanel.style.pointerEvents = 'none';
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    
+    requestAnimationFrame(() => {
+      const containerWidth = document.querySelector('.main-layout').offsetWidth;
+      const mouseX = e.clientX;
+      
+      // Calculate new width for review panel (from right edge)
+      const newWidth = window.innerWidth - mouseX;
+      
+      // Constraints
+      const minW = 250;
+      const maxW = containerWidth * 0.7;
+      
+      if (newWidth >= minW && newWidth <= maxW) {
+        reviewPanel.style.width = newWidth + 'px';
+        localStorage.setItem('review_panel_width', newWidth);
+      }
+    });
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor = 'default';
+    document.body.style.userSelect = 'auto';
+    editorPanel.style.pointerEvents = 'auto';
+  });
+
+  // Load saved width
+  const savedWidth = localStorage.getItem('review_panel_width');
+  if (savedWidth) {
+    reviewPanel.style.width = savedWidth + 'px';
+  }
+}
+</script>
+</body>
+</html>
