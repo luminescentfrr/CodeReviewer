@@ -66,6 +66,9 @@ codereviewer/
 ├── tests/                       # 测试用例
 ├── reports/                     # 审查报告自动保存目录
 ├── requirements.txt
+├── package.json                 # Electron 入口 + npm scripts
+├── package-lock.json
+├── .env.example                 # 环境变量模板
 ├── .gitignore
 └── README.md
 ```
@@ -144,18 +147,31 @@ codereviewer/
 # 1. 进入项目目录
 cd codereviewer
 
-# 2. 安装 Python 依赖
+# 3. 创建虚拟环境（推荐）
+python -m venv venv
+
+# Windows
+venv\Scripts\activate
+# macOS / Linux
+source venv/bin/activate
+
+# 4. 配置 Python 路径 — 编辑 electron/config.json
+# 将 pythonPath 改为虚拟环境中的 python.exe 路径
+# Windows 示例: "venv\\Scripts\\python.exe"
+# macOS/Linux 示例: "venv/bin/python"
+
+# 5. 安装 Python 依赖
 pip install -r requirements.txt
 
-# 3. 安装 Node.js 依赖（Electron）
+# 6. 安装 Node.js 依赖（Electron）
 npm install
 
-# 4. 配置环境变量
+# 7. 配置环境变量
 cp .env.example .env
 # 编辑 .env 填入 API Key
 # 至少配置 DEEPSEEK_API_KEY（推荐）或 OPENAI_API_KEY
 
-# 5. 一键启动（Electron 桌面端 + Python 后端）
+# 8. 一键启动（Electron 桌面端 + Python 后端）
 npm start
 ```
 
