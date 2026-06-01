@@ -235,11 +235,4 @@ uvicorn backend.main:app --reload --port 8765
 | `DAILY_TOKEN_LIMIT` | 每日令牌配额 | `1000000` |
 | `WORKSPACE_ROOT` | 工作区根目录 | 当前目录 |
 
-## 成本参考
 
-单次审查（~200 行代码，6 Agent 并行 + Summarizer）：
-
-| 配置 | 预估费用 | 预估耗时 |
-|------|----------|----------|
-| DeepSeek | < ¥0.05 | ~30s |
-| OpenAI GPT-4o | ~¥0.80 | ~35s |
